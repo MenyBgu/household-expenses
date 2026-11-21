@@ -26,6 +26,7 @@
 .DS_Store
 *.pem
 *.traineddata
+*client_secret*.json
 
 # debug
 npm-debug.log*
