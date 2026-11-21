@@ -128,6 +128,17 @@ function displayNameFromEmail(email?: string) {
   return email?.split("@")[0] || "משתמש";
 }
 
+function readableError(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const value = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+    const details = [value.message, value.code, value.details, value.hint]
+      .filter((item): item is string => typeof item === "string" && item.length > 0);
+    if (details.length) return `${fallback}: ${details.join(" · ")}`;
+  }
+  return fallback;
+}
+
 function LoginScreen({ onLogin, configured }: { onLogin: () => void; configured: boolean }) {
   return (
     <main className="login-page">
@@ -275,7 +286,7 @@ function ExpenseForm({
     try {
       await onSave(values, editingId);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "שמירת ההוצאה נכשלה");
+      setError(readableError(saveError, "שמירת ההוצאה נכשלה"));
     } finally {
       setSaving(false);
     }
