@@ -1,4 +1,4 @@
-import { endOfMonth, format, parseISO, startOfMonth, subMonths } from "date-fns";
+import { addMonths, endOfMonth, format, parseISO, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 
 export function formatCurrency(amount: number, currency = "ILS") {
@@ -36,6 +36,17 @@ export function monthBounds(month: string) {
 
 export function previousIsoMonth(month: string) {
   return format(subMonths(parseISO(`${month}-01`), 1), "yyyy-MM");
+}
+
+export function nextIsoMonth(month: string) {
+  return format(addMonths(parseISO(`${month}-01`), 1), "yyyy-MM");
+}
+
+export function monthTitle(month: string) {
+  return new Intl.DateTimeFormat("he-IL", {
+    month: "long",
+    year: "numeric",
+  }).format(parseISO(`${month}-01`));
 }
 
 export function percentChange(current: number, previous: number) {

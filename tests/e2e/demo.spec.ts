@@ -27,4 +27,15 @@ test.describe("מצב הדגמה", () => {
     await nav.getByRole("button", { name: "תמונה" }).click();
     await expect(page.getByRole("heading", { name: "צילום דף הוצאות" })).toBeVisible();
   });
+
+  test("מאפשר לדפדף בין חודשים ולראות סיכום שנתי", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByRole("tab", { name: "חודשי" })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("button", { name: "חודש קודם" }).click();
+    await expect(page.getByRole("textbox", { name: "בחירת חודש לניתוח" })).toHaveValue(/2026-10|2026-11/);
+    await page.getByRole("tab", { name: "שנתי" }).click();
+    await expect(page.getByText(/סיכום שנת 20\d{2}/)).toBeVisible();
+    await expect(page.getByText("מגמת ההוצאות השנתית")).toBeVisible();
+  });
 });

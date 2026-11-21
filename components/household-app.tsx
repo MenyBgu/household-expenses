@@ -12,6 +12,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -24,6 +26,7 @@ import {
   CalendarDays,
   Check,
   ChevronLeft,
+  ChevronRight,
   CircleHelp,
   FileText,
   Home,
@@ -41,7 +44,7 @@ import {
 import { demoCategories, demoExpenses, demoHousehold } from "@/lib/demo-data";
 import { NotebookImport } from "@/components/notebook-import";
 import { suggestCategory } from "@/lib/notebook-import";
-import { formatCurrency, formatDate, percentChange, previousIsoMonth } from "@/lib/format";
+import { formatCurrency, formatDate, monthTitle, nextIsoMonth, percentChange, previousIsoMonth } from "@/lib/format";
 import { sumMoney } from "@/lib/money";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Category, DraftRow, Expense, Household } from "@/lib/types";
@@ -442,20 +445,23 @@ function MonthlyEntry({
 function Dashboard({
   expenses,
   categories,
-  currentMonth,
-  currentDate,
+  selectedMonth,
+  onMonthChange,
   onAdd,
   onNavigate,
 }: {
   expenses: Expense[];
   categories: Category[];
-  currentMonth: string;
-  currentDate: string;
+  selectedMonth: string;
+  onMonthChange: (month: string) => void;
   onAdd: () => void;
   onNavigate: (view: View) => void;
 }) {
-  const monthExpenses = expenses.filter((expense) => expense.expense_date.startsWith(currentMonth));
-  const previousMonth = expenses.filter((expense) => expense.expense_date.startsWith(previousIsoMonth(currentMonth)));
+  const [range, setRange] = useState<"month" | "year">("month");
+  const selectedYear = selectedMonth.slice(0, 4);
+  const monthExpenses = expenses.filter((expense) => expense.expense_date.startsWith(selectedMonth));
+  const previousMonth = expenses.filter((expense) => expense.expense_date.startsWith(previousIsoMonth(selectedMonth)));
+  const yearExpenses = expenses.filter((expense) => expense.expense_date.startsWith(`${selectedYear}-`));
   const total = sumMoney(monthExpenses.map((expense) => expense.amount));
   const previousTotal = sumMoney(previousMonth.map((expense) => expense.amount));
   const change = percentChange(total, previousTotal);
@@ -464,34 +470,100 @@ function Dashboard({
     amount: sumMoney(monthExpenses.filter((expense) => expense.category_id === category.id).map((expense) => expense.amount)),
   })).filter((category) => category.amount > 0).sort((a, b) => b.amount - a.amount);
   const largest = byCategory[0];
+  const dailyTotals = Array.from(new Set(monthExpenses.map((expense) => expense.expense_date)))
+    .sort()
+    .map((date) => ({
+      day: date.slice(-2),
+      amount: sumMoney(monthExpenses.filter((expense) => expense.expense_date === date).map((expense) => expense.amount)),
+    }));
+  const annualTotals = Array.from({ length: 12 }, (_, index) => {
+    const month = `${selectedYear}-${String(index + 1).padStart(2, "0")}`;
+    const monthData = yearExpenses.filter((expense) => expense.expense_date.startsWith(month));
+    return {
+      month,
+      label: monthTitle(month).replace(selectedYear, "").trim(),
+      amount: sumMoney(monthData.map((expense) => expense.amount)),
+      count: monthData.length,
+    };
+  });
+  const annualTotal = sumMoney(yearExpenses.map((expense) => expense.amount));
+  const annualAverage = annualTotals.filter((item) => item.count > 0);
+  const highestMonth = [...annualTotals].sort((a, b) => b.amount - a.amount)[0];
+  const annualByCategory = categories.map((category) => ({
+    name: category.name,
+    amount: sumMoney(yearExpenses.filter((expense) => expense.category_id === category.id).map((expense) => expense.amount)),
+  })).filter((category) => category.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);
 
   return (
     <section className="content-section">
       <div className="section-heading">
-        <div><p className="eyebrow">{formatDate(currentDate)}</p><h1>שלום, בואו נעשה סדר</h1><p className="muted">זו תמונת המצב של ההוצאות שלכם החודש.</p></div>
+        <div><p className="eyebrow">{range === "month" ? monthTitle(selectedMonth) : `סיכום שנת ${selectedYear}`}</p><h1>שלום, בואו נעשה סדר</h1><p className="muted">{range === "month" ? "זו תמונת המצב של ההוצאות שלכם החודש." : "מבט פשוט על המגמות וההוצאות לאורך השנה."}</p></div>
         <button className="primary-button" onClick={onAdd}><Plus size={18} /> הוספת הוצאה</button>
       </div>
-      <div className="stats-grid">
-        <StatCard title="הוצאות החודש" value={formatCurrency(total)} helper={`${monthExpenses.length} הוצאות`} icon={<Wallet size={20} />} />
-        <StatCard title="לעומת החודש הקודם" value={change === null ? "אין נתונים" : `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`} helper={previousTotal ? formatCurrency(previousTotal) : "לא קיימים נתוני השוואה"} icon={change !== null && change >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />} tone={change !== null && change > 0 ? "orange" : "green"} />
-        <StatCard title="הקטגוריה הגדולה" value={largest?.name ?? "אין עדיין"} helper={largest ? formatCurrency(largest.amount) : "הוסיפו הוצאה כדי לראות"} icon={<BarChart3 size={20} />} tone="purple" />
-        <StatCard title="הוצאות היסטוריות" value={String(monthExpenses.filter((expense) => expense.is_historical).length)} helper="הועברו מהמחברת" icon={<FileText size={20} />} tone="blue" />
-      </div>
-      <div className="dashboard-grid">
-        <article className="panel chart-panel">
-          <div className="panel-heading"><div><h2>התפלגות לפי קטגוריה</h2><p className="muted">החודש הנוכחי</p></div><BarChart3 size={20} className="muted-icon" /></div>
-          {byCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={byCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" radius={[0, 5, 5, 0]}>{byCategory.map((entry, index) => <Cell key={entry.name} fill={["#3b5ccc", "#36a269", "#c98018", "#8b5cf6", "#d25b83"][index % 5]} />)}</Bar></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הגרף.</p></div>}
-        </article>
-        <article className="panel">
-          <div className="panel-heading"><div><h2>פעולות מהירות</h2><p className="muted">הדרך הקלה להמשיך</p></div><Sparkles size={20} className="muted-icon" /></div>
-          <div className="quick-actions">
-            <button onClick={onAdd}><Receipt size={19} /><span><strong>הוצאה בודדת</strong><small>רישום מהיר של הוצאה</small></span><ChevronLeft size={17} /></button>
-            <button onClick={() => onNavigate("monthly")}><FileText size={19} /><span><strong>הזנת חודש שלם</strong><small>העברת הוצאות מהמחברת</small></span><ChevronLeft size={17} /></button>
-            <button onClick={() => onNavigate("expenses")}><Search size={19} /><span><strong>חיפוש הוצאות</strong><small>מציאת הוצאה לפי עסק או קטגוריה</small></span><ChevronLeft size={17} /></button>
+      <div className="analytics-toolbar">
+        <div className="range-tabs" role="tablist" aria-label="טווח ניתוח">
+          <button className={range === "month" ? "active" : ""} role="tab" aria-selected={range === "month"} onClick={() => setRange("month")}>חודשי</button>
+          <button className={range === "year" ? "active" : ""} role="tab" aria-selected={range === "year"} onClick={() => setRange("year")}>שנתי</button>
+        </div>
+        {range === "month" && (
+          <div className="month-navigation">
+            <button className="icon-button" onClick={() => onMonthChange(previousIsoMonth(selectedMonth))} aria-label="חודש קודם"><ChevronRight size={18} /></button>
+            <strong>{monthTitle(selectedMonth)}</strong>
+            <input type="month" value={selectedMonth} onChange={(event) => onMonthChange(event.target.value)} aria-label="בחירת חודש לניתוח" />
+            <button className="icon-button" onClick={() => onMonthChange(nextIsoMonth(selectedMonth))} aria-label="חודש הבא"><ChevronLeft size={18} /></button>
           </div>
-        </article>
+        )}
+        {range === "year" && <label className="year-picker"><span>שנה</span><input type="number" min="2000" max="2100" value={selectedYear} onChange={(event) => onMonthChange(`${event.target.value}-01`)} /></label>}
       </div>
-      {largest && <div className="insight"><Sparkles size={19} /><span>הקטגוריה הגדולה ביותר החודש היא <strong>{largest.name}</strong>, עם {formatCurrency(largest.amount)}.</span></div>}
+      {range === "month" ? (
+        <>
+          <div className="stats-grid">
+            <StatCard title="הוצאות החודש" value={formatCurrency(total)} helper={`${monthExpenses.length} הוצאות`} icon={<Wallet size={20} />} />
+            <StatCard title="לעומת החודש הקודם" value={change === null ? "אין נתונים" : `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`} helper={previousTotal ? formatCurrency(previousTotal) : "לא קיימים נתוני השוואה"} icon={change !== null && change >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />} tone={change !== null && change > 0 ? "orange" : "green"} />
+            <StatCard title="הקטגוריה הגדולה" value={largest?.name ?? "אין עדיין"} helper={largest ? formatCurrency(largest.amount) : "הוסיפו הוצאה כדי לראות"} icon={<BarChart3 size={20} />} tone="purple" />
+            <StatCard title="הוצאות היסטוריות" value={String(monthExpenses.filter((expense) => expense.is_historical).length)} helper="הועברו מהמחברת" icon={<FileText size={20} />} tone="blue" />
+          </div>
+          <div className="dashboard-grid">
+            <article className="panel chart-panel">
+              <div className="panel-heading"><div><h2>קצב ההוצאות</h2><p className="muted">סכום לפי יום בחודש</p></div><BarChart3 size={20} className="muted-icon" /></div>
+              {dailyTotals.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><LineChart data={dailyTotals} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="day" stroke="var(--muted)" fontSize={11} /><YAxis stroke="var(--muted)" fontSize={11} tickFormatter={(value) => `${value} ₪`} /><Tooltip formatter={(value) => formatCurrency(Number(value))} labelFormatter={(label) => `יום ${label}`} /><Line type="monotone" dataKey="amount" name="הוצאות" stroke="#3b5ccc" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} /></LineChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין נתונים להצגת המגמה.</p></div>}
+            </article>
+            <article className="panel chart-panel">
+              <div className="panel-heading"><div><h2>התפלגות לפי קטגוריה</h2><p className="muted">החודש הנבחר</p></div><BarChart3 size={20} className="muted-icon" /></div>
+              {byCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={byCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" radius={[0, 5, 5, 0]}>{byCategory.map((entry, index) => <Cell key={entry.name} fill={["#3b5ccc", "#36a269", "#c98018", "#8b5cf6", "#d25b83"][index % 5]} />)}</Bar></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הגרף.</p></div>}
+            </article>
+          </div>
+          {largest && <div className="insight"><Sparkles size={19} /><span>הקטגוריה הגדולה ביותר החודש היא <strong>{largest.name}</strong>, עם {formatCurrency(largest.amount)}.</span></div>}
+        </>
+      ) : (
+        <>
+          <div className="stats-grid">
+            <StatCard title={`סך הוצאות ${selectedYear}`} value={formatCurrency(annualTotal)} helper={`${yearExpenses.length} הוצאות`} icon={<Wallet size={20} />} />
+            <StatCard title="ממוצע לחודש פעיל" value={annualAverage.length ? formatCurrency(annualTotal / annualAverage.length) : "אין נתונים"} helper={`${annualAverage.length} חודשים עם הוצאות`} icon={<BarChart3 size={20} />} tone="green" />
+            <StatCard title="החודש היקר ביותר" value={highestMonth?.amount ? highestMonth.label : "אין עדיין"} helper={highestMonth?.amount ? formatCurrency(highestMonth.amount) : "הוסיפו הוצאות כדי לראות"} icon={<ArrowUpRight size={20} />} tone="orange" />
+            <StatCard title="קטגוריה מובילה" value={annualByCategory[0]?.name ?? "אין עדיין"} helper={annualByCategory[0] ? formatCurrency(annualByCategory[0].amount) : "אין נתונים"} icon={<BarChart3 size={20} />} tone="purple" />
+          </div>
+          <div className="dashboard-grid">
+            <article className="panel chart-panel">
+              <div className="panel-heading"><div><h2>מגמת ההוצאות השנתית</h2><p className="muted">{selectedYear}, לפי חודש</p></div><BarChart3 size={20} className="muted-icon" /></div>
+              <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={annualTotals} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" /><XAxis dataKey="label" stroke="var(--muted)" fontSize={11} /><YAxis stroke="var(--muted)" fontSize={11} tickFormatter={(value) => `${value} ₪`} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" fill="#3b5ccc" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div>
+            </article>
+            <article className="panel chart-panel">
+              <div className="panel-heading"><div><h2>הקטגוריות המובילות</h2><p className="muted">סיכום שנתי</p></div><BarChart3 size={20} className="muted-icon" /></div>
+              {annualByCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={annualByCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" fill="#36a269" radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הסיכום השנתי.</p></div>}
+            </article>
+          </div>
+          <div className="insight"><Sparkles size={19} /><span>{annualTotal ? `בשנת ${selectedYear} נרשמו ${yearExpenses.length} הוצאות בסכום כולל של ${formatCurrency(annualTotal)}.` : "עדיין אין הוצאות לשנה הזו. אפשר לבחור שנה אחרת או להוסיף הוצאה."}</span></div>
+        </>
+      )}
+      <article className="panel quick-actions-panel">
+        <div className="panel-heading"><div><h2>פעולות מהירות</h2><p className="muted">הדרך הקלה להמשיך</p></div><Sparkles size={20} className="muted-icon" /></div>
+        <div className="quick-actions">
+          <button onClick={onAdd}><Receipt size={19} /><span><strong>הוצאה בודדת</strong><small>רישום מהיר של הוצאה</small></span><ChevronLeft size={17} /></button>
+          <button onClick={() => onNavigate("monthly")}><FileText size={19} /><span><strong>הזנת חודש שלם</strong><small>העברת הוצאות מהמחברת</small></span><ChevronLeft size={17} /></button>
+          <button onClick={() => onNavigate("expenses")}><Search size={19} /><span><strong>חיפוש הוצאות</strong><small>מציאת הוצאה לפי עסק או קטגוריה</small></span><ChevronLeft size={17} /></button>
+        </div>
+      </article>
     </section>
   );
 }
@@ -545,6 +617,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [expenses, setExpenses] = useState<Expense[]>(demoMode ? demoExpenses : []);
   const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
   const [draftMonth, setDraftMonth] = useState(initialMonth);
+  const [dashboardMonth, setDashboardMonth] = useState(initialMonth);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(1);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -861,7 +934,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (loading) return <main className="login-page"><div className="loading-state"><div className="spinner" /><p>טוען את נתוני משק הבית...</p></div></main>;
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
-  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} currentMonth={initialMonth} currentDate={initialDate} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} /> :
+  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} /> :
     view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onEdit={(expense) => { setEditingExpense(expense); setShowExpenseForm(true); }} onDelete={deleteExpense} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, initialDate)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={initialMonth} onConfirm={acceptNotebookRows} onCancel={() => setView("dashboard")} /> :
