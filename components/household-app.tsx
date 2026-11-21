@@ -78,6 +78,16 @@ type ExpenseFormValues = {
   notes: string;
 };
 
+const paymentMethodOptions = [
+  { value: "credit_card", label: "אשראי" },
+  { value: "cash", label: "מזומן" },
+  { value: "bank_transfer", label: "העברה בנקאית" },
+  { value: "direct_debit", label: "הוראת קבע" },
+  { value: "check", label: "צ׳ק" },
+  { value: "bit_paybox", label: "ביט / פייבוקס" },
+  { value: "other", label: "אחר" },
+];
+
 function makeNewRow(categoryId = demoCategories[0]?.id ?? "", date: string): DraftRow {
   return {
     id: crypto.randomUUID(),
@@ -293,10 +303,7 @@ function ExpenseForm({
           אמצעי תשלום
           <select value={values.payment_method} onChange={(event) => change("payment_method", event.target.value)}>
             <option value="">לא צוין</option>
-            <option value="אשראי">אשראי</option>
-            <option value="מזומן">מזומן</option>
-            <option value="העברה">העברה</option>
-            <option value="הוראת קבע">הוראת קבע</option>
+            {paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </label>
         <label className="span-two">
@@ -408,7 +415,7 @@ function MonthlyEntry({
                   <td><input value={row.description} onChange={(event) => onChange(row.id, "description", event.target.value)} placeholder="תיאור" /></td>
                   <td><input inputMode="decimal" value={row.amount} onChange={(event) => onChange(row.id, "amount", event.target.value)} placeholder="0.00" /></td>
                   <td><select value={row.category_id} onChange={(event) => onChange(row.id, "category_id", event.target.value)}><option value="">קטגוריה</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></td>
-                  <td><select value={row.payment_method} onChange={(event) => onChange(row.id, "payment_method", event.target.value)}><option value="">לא צוין</option><option value="אשראי">אשראי</option><option value="מזומן">מזומן</option><option value="העברה">העברה</option></select></td>
+                  <td><select value={row.payment_method} onChange={(event) => onChange(row.id, "payment_method", event.target.value)}><option value="">לא צוין</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></td>
                   <td><button className="icon-button danger-icon" type="button" onClick={() => onDeleteRow(row.id)} aria-label="מחיקת שורה"><Trash2 size={17} /></button></td>
                   {!validation.success && <td className="row-error" colSpan={7}>{validation.error.issues[0]?.message}</td>}
                 </tr>
