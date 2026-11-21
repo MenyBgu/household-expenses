@@ -42,6 +42,7 @@ import {
   X,
 } from "lucide-react";
 import { demoCategories, demoExpenses, demoHousehold } from "@/lib/demo-data";
+import { BrandLogo, HouseholdIllustration } from "@/components/brand";
 import { NotebookImport } from "@/components/notebook-import";
 import { suggestCategory } from "@/lib/notebook-import";
 import { formatCurrency, formatDate, monthTitle, nextIsoMonth, percentChange, previousIsoMonth } from "@/lib/format";
@@ -143,7 +144,8 @@ function LoginScreen({ onLogin, configured }: { onLogin: () => void; configured:
   return (
     <main className="login-page">
       <section className="login-card">
-        <div className="brand-mark"><Wallet size={22} /></div>
+        <BrandLogo />
+        <HouseholdIllustration />
         <p className="eyebrow">הוצאות הבית</p>
         <h1>מנהלים את הוצאות הבית בפשטות</h1>
         <p className="muted">
@@ -200,7 +202,7 @@ function Onboarding({
   return (
     <main className="login-page">
       <section className="login-card onboarding-card">
-        <div className="brand-mark"><Home size={22} /></div>
+        <BrandLogo />
         <p className="eyebrow">ברוכים הבאים, {displayName}</p>
         <h1>ניצור את משק הבית הראשון</h1>
         <p className="muted">אפשר לשנות את השם בהמשך. בשלב זה רק אתה תהיה חבר במשק הבית.</p>
@@ -1063,7 +1065,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   return (
     <div className="app-layout">
       <aside className="sidebar">
-        <div className="sidebar-brand"><div className="brand-mark small-mark"><Wallet size={19} /></div><strong>הוצאות הבית</strong></div>
+        <div className="sidebar-brand"><BrandLogo small /><strong>הוצאות הבית</strong></div>
         <div className="household-switcher"><span className="household-avatar">{household.name.slice(0, 1)}</span><span><small>משק הבית</small><strong>{household.name}</strong></span><ChevronLeft size={16} /></div>
         <nav className="main-nav">
           <button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><Home size={18} /> בית</button>

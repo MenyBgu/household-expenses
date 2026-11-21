@@ -899,6 +899,14 @@ textarea {
   margin: 0 auto 20px;
 }
 
+.welcome-illustration {
+  display: block;
+  width: min(100%, 290px);
+  height: auto;
+  margin: -4px auto 12px;
+  color: var(--primary);
+}
+
 .login-card h1 {
   margin: 8px 0 12px;
   font-size: 30px;
