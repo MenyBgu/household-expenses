@@ -1,0 +1,215 @@
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  addMember,
+  asAdmin,
+  asUser,
+  categoryIdByName,
+  createHousehold,
+  createTestDb,
+  createUser,
+  insertExpense,
+  type TestDb,
+} from "./harness";
+
+describe("סכמת מסד הנתונים והרשאות", () => {
+  let db: TestDb | undefined;
+
+  afterEach(async () => {
+    await db?.close();
+    db = undefined;
+  });
+
+  it("יוצר משק בית עם קטגוריות ברירת מחדל, כולל אירועים", async () => {
+    db = await createTestDb();
+    const userId = await createUser(db, "owner");
+    const householdId = await createHousehold(db, userId, "משפחת ישראלי");
+
+    await asAdmin(db);
+    const result = await db.query<{ count: string }>(
+      "select count(*)::text as count from public.categories where household_id = $1",
+      [householdId],
+    );
+
+    expect(result.rows[0].count).toBe("32");
+  });
+
+  it("מונע מחבר לקרוא נתונים ממשק בית אחר", async () => {
+    db = await createTestDb();
+    const owner = await createUser(db, "owner");
+    const outsider = await createUser(db, "outsider");
+    const householdId = await createHousehold(db, owner, "בית פרטי");
+    const categoryId = await categoryIdByName(db, owner, householdId, "מזון וסופר");
+    await insertExpense(db, owner, householdId, {
+      categoryId,
+      amount: "125.50",
+      date: "2026-12-01",
+      merchant: "סופר",
+    });
+
+    await asUser(db, outsider);
+    const householdRows = await db.query("select * from public.households");
+    const expenseRows = await db.query("select * from public.expenses");
+
+    expect(householdRows.rows).toHaveLength(0);
+    expect(expenseRows.rows).toHaveLength(0);
+  });
+
+  it("מאפשר לחברי אותו משק בית לראות הוצאות, אך לא לשנות את היוצר", async () => {
+    db = await createTestDb();
+    const owner = await createUser(db, "owner");
+    const member = await createUser(db, "member");
+    const householdId = await createHousehold(db, owner, "משפחה");
+    await addMember(db, owner, householdId, member);
+    const categoryId = await categoryIdByName(db, owner, householdId, "תחבורה");
+    const expenseId = await insertExpense(db, owner, householdId, {
+      categoryId,
+      amount: "80",
+      date: "2026-12-02",
+      merchant: "דלק",
+    });
+
+    await asUser(db, member);
+    const visible = await db.query("select id from public.expenses where id = $1", [expenseId]);
+    expect(visible.rows).toHaveLength(1);
+
+    await db.query(
+      "update public.expenses set created_by = $1 where id = $2",
+      [member, expenseId],
+    );
+    const unchanged = await db.query<{ created_by: string }>(
+      "select created_by from public.expenses where id = $1",
+      [expenseId],
+    );
+    expect(unchanged.rows[0].created_by).toBe(owner);
+  });
+
+  it("חוסם מחיקה פיזית ומאפשר מחיקה רכה ושחזור", async () => {
+    db = await createTestDb();
+    const owner = await createUser(db, "owner");
+    const householdId = await createHousehold(db, owner, "משפחה");
+    const categoryId = await categoryIdByName(db, owner, householdId, "דיור");
+    const expenseId = await insertExpense(db, owner, householdId, {
+      categoryId,
+      amount: "350",
+      date: "2026-12-03",
+      merchant: "ועד בית",
+    });
+
+    await asUser(db, owner);
+    await expect(db.query("delete from public.expenses where id = $1", [expenseId])).rejects.toThrow();
+
+    await db.query("update public.expenses set deleted_at = now() where id = $1", [expenseId]);
+    const hidden = await db.query("select id from public.expenses where id = $1", [expenseId]);
+    expect(hidden.rows).toHaveLength(1);
+
+    await db.query("update public.expenses set deleted_at = null where id = $1", [expenseId]);
+    const restored = await db.query("select id from public.expenses where id = $1", [expenseId]);
+    expect(restored.rows).toHaveLength(1);
+  });
+
+  it("שומר הזנה חודשית פעם אחת בלבד גם אם שולחים אותה שוב", async () => {
+    db = await createTestDb();
+    const owner = await createUser(db, "owner");
+    const householdId = await createHousehold(db, owner, "משפחה");
+    const categoryId = await categoryIdByName(db, owner, householdId, "דלק");
+
+    await asUser(db, owner);
+    const draft = await db.query<{ id: string }>(
+      `insert into public.monthly_entry_drafts
+        (household_id, created_by, year, month, draft_data)
+       values ($1, $2, 2026, 12, '{"rows":[]}'::jsonb)
+       returning id`,
+      [householdId, owner],
+    );
+    const draftId = draft.rows[0].id;
+    const batchKey = "10000000-0000-0000-0000-000000000001";
+    const rows = JSON.stringify([
+      {
+        merchant_name: "תחנת דלק",
+        description: "",
+        amount: "200",
+        expense_date: "2026-12-01",
+        category_id: categoryId,
+        payment_method: "",
+        paid_by: owner,
+        notes: "",
+      },
+      {
+        merchant_name: "",
+        description: "דלק",
+        amount: "75.50",
+        expense_date: "2026-12-02",
+        category_id: categoryId,
+        payment_method: "",
+        paid_by: owner,
+        notes: "",
+      },
+    ]);
+
+    const save = async () =>
+      db!.query<{ result: { status: string; inserted_count: number } }>(
+        `select public.commit_monthly_entry(
+          $1, $2, $3, 1, $4::jsonb, '{"rows":[]}'::jsonb, 'ILS'
+        ) as result`,
+        [householdId, draftId, batchKey, rows],
+      );
+
+    const first = await save();
+    const second = await save();
+    expect(first.rows[0].result.status).toBe("saved");
+    expect(second.rows[0].result.status).toBe("already_saved");
+    expect(Number(second.rows[0].result.inserted_count)).toBe(2);
+
+    const expenses = await db.query<{ count: string }>(
+      "select count(*)::text as count from public.expenses where household_id = $1",
+      [householdId],
+    );
+    expect(expenses.rows[0].count).toBe("2");
+  });
+
+  it("לא שומר אף שורה כאשר אחת משורות ההזנה אינה תקינה", async () => {
+    db = await createTestDb();
+    const owner = await createUser(db, "owner");
+    const householdId = await createHousehold(db, owner, "משפחה");
+    const categoryId = await categoryIdByName(db, owner, householdId, "מזון וסופר");
+
+    await asUser(db, owner);
+    const draft = await db.query<{ id: string }>(
+      `insert into public.monthly_entry_drafts
+        (household_id, created_by, year, month, draft_data)
+       values ($1, $2, 2026, 12, '{"rows":[]}'::jsonb)
+       returning id`,
+      [householdId, owner],
+    );
+    const rows = JSON.stringify([
+      {
+        merchant_name: "סופר",
+        amount: "100",
+        expense_date: "2026-12-01",
+        category_id: categoryId,
+      },
+      {
+        merchant_name: "שורה ללא סכום",
+        amount: "",
+        expense_date: "2026-12-02",
+        category_id: categoryId,
+      },
+    ]);
+
+    await expect(
+      db.query(
+        `select public.commit_monthly_entry(
+          $1, $2, '20000000-0000-0000-0000-000000000001', 1,
+          $3::jsonb, '{"rows":[]}'::jsonb, 'ILS'
+        )`,
+        [householdId, draft.rows[0].id, rows],
+      ),
+    ).rejects.toThrow("לא נשמרה אף שורה");
+
+    const expenses = await db.query<{ count: string }>(
+      "select count(*)::text as count from public.expenses where household_id = $1",
+      [householdId],
+    );
+    expect(expenses.rows[0].count).toBe("0");
+  });
+});
