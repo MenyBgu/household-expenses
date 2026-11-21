@@ -88,6 +88,17 @@ const paymentMethodOptions = [
   { value: "other", label: "אחר" },
 ];
 
+const legacyPaymentMethods: Record<string, string> = {
+  "אשראי": "credit_card",
+  "מזומן": "cash",
+  "העברה": "bank_transfer",
+  "הוראת קבע": "direct_debit",
+};
+
+function toDatabasePaymentMethod(value: string) {
+  return legacyPaymentMethods[value] ?? value;
+}
+
 function makeNewRow(categoryId = demoCategories[0]?.id ?? "", date: string): DraftRow {
   return {
     id: crypto.randomUUID(),
@@ -787,7 +798,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
       amount: Number(values.amount),
       expense_date: values.expense_date,
       category_id: values.category_id,
-      payment_method: values.payment_method || null,
+      payment_method: values.payment_method ? toDatabasePaymentMethod(values.payment_method) : null,
       notes: values.notes || null,
       currency: household?.default_currency ?? "ILS",
       household_id: household?.id,
@@ -804,10 +815,10 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     } else if (supabase) {
       if (id) {
         const { error } = await supabase.from("expenses").update(payload).eq("id", id);
-        if (error) throw new Error("עדכון ההוצאה נכשל");
+        if (error) throw new Error(`עדכון ההוצאה נכשל: ${error.message}`);
       } else {
         const { error } = await supabase.from("expenses").insert(payload);
-        if (error) throw new Error("שמירת ההוצאה נכשלה");
+        if (error) throw new Error(`שמירת ההוצאה נכשלה: ${error.message}`);
       }
       await loadRemoteData();
     }
@@ -895,7 +906,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           currency: household?.default_currency ?? "ILS",
           expense_date: row.expense_date,
           category_id: row.category_id,
-          payment_method: row.payment_method || null,
+          payment_method: row.payment_method ? toDatabasePaymentMethod(row.payment_method) : null,
           notes: row.notes || "נוצר מהזנת תמונה",
           source: "manual",
           is_historical: false,
@@ -914,7 +925,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           currency: household.default_currency,
           expense_date: row.expense_date,
           category_id: row.category_id,
-          payment_method: row.payment_method || null,
+          payment_method: row.payment_method ? toDatabasePaymentMethod(row.payment_method) : null,
           notes: row.notes || "נוצר מהזנת תמונה",
           source: "manual",
           is_historical: false,
@@ -974,7 +985,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         currency: household.default_currency,
         expense_date: row.expense_date,
         category_id: row.category_id,
-        payment_method: row.payment_method || null,
+        payment_method: row.payment_method ? toDatabasePaymentMethod(row.payment_method) : null,
         notes: row.notes || null,
         source: "monthly_entry",
         is_historical: true,
