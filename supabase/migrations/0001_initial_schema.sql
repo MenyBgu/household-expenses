@@ -942,13 +942,13 @@ create policy expense_images_select on storage.objects for select to authenticat
 create policy expense_images_insert on storage.objects for insert to authenticated
   with check (
     bucket_id = 'expense-images'
-    and owner_id = auth.uid()::text
+    and owner_id::uuid = auth.uid()
     and public.is_household_member((storage.foldername(name))[1]::uuid)
   );
 create policy expense_images_delete on storage.objects for delete to authenticated
   using (
     bucket_id = 'expense-images'
-    and (owner_id = auth.uid()::text or public.is_household_admin((storage.foldername(name))[1]::uuid))
+    and (owner_id::uuid = auth.uid() or public.is_household_admin((storage.foldername(name))[1]::uuid))
   );
 
 -- ---------------------------------------------------------------------
