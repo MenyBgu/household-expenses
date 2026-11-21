@@ -215,12 +215,14 @@ function ExpenseForm({
   initial,
   editingId,
   onCancel,
+  onPhoto,
   onSave,
 }: {
   categories: Category[];
   initial: ExpenseFormValues;
   editingId?: string;
   onCancel?: () => void;
+  onPhoto?: () => void;
   onSave: (values: ExpenseFormValues, id?: string) => Promise<void>;
 }) {
   const [values, setValues] = useState(initial);
@@ -305,6 +307,7 @@ function ExpenseForm({
       {error && <p className="field-error">{error}</p>}
       <div className="form-actions">
         {onCancel && <button type="button" className="secondary-button" onClick={onCancel}>ביטול</button>}
+        {!editingId && onPhoto && <button type="button" className="secondary-button" onClick={onPhoto}><ImagePlus size={17} /> הוספה מתמונה</button>}
         <button className="primary-button" disabled={saving}>{saving ? "שומר..." : editingId ? "שמירת שינויים" : "שמירת הוצאה"}</button>
       </div>
     </form>
@@ -574,16 +577,19 @@ function ExpensesView({
   onAdd,
   onEdit,
   onDelete,
+  onDeleteMany,
 }: {
   expenses: Expense[];
   categories: Category[];
   onAdd: () => void;
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => Promise<void>;
+  onDeleteMany: (ids: string[]) => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const filtered = expenses.filter((expense) => {
     const text = `${expense.merchant_name ?? ""} ${expense.description ?? ""}`.toLowerCase();
     return (!query || text.includes(query.toLowerCase())) &&
@@ -591,6 +597,28 @@ function ExpensesView({
       (!dateFilter || expense.expense_date.startsWith(dateFilter));
   });
   const total = sumMoney(filtered.map((expense) => expense.amount));
+  const allSelected = filtered.length > 0 && filtered.every((expense) => selectedIds.has(expense.id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(filtered.map((expense) => expense.id)));
+  }
+
+  async function deleteSelected() {
+    const ids = [...selectedIds].filter((id) => filtered.some((expense) => expense.id === id));
+    if (!ids.length) return;
+    if (!window.confirm(`למחוק ${ids.length} הוצאות? הן יוסרו מהרשימה ומהסטטיסטיקות.`)) return;
+    await onDeleteMany(ids);
+    setSelectedIds(new Set());
+  }
 
   return (
     <section className="content-section">
@@ -601,8 +629,12 @@ function ExpensesView({
         <label><span className="sr-only">קטגוריה</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">כל הקטגוריות</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         {(query || categoryFilter || dateFilter) && <button className="text-button" onClick={() => { setQuery(""); setCategoryFilter(""); setDateFilter(""); }}>ניקוי מסננים</button>}
       </div>
+      <div className="selection-toolbar">
+        <label className="checkbox-label"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="בחירת כל ההוצאות המוצגות" /><span>בחירת הכל</span></label>
+        {selectedIds.size > 0 && <><span className="small muted">{selectedIds.size} נבחרו</span><button className="danger-button" type="button" onClick={deleteSelected}>מחיקת ההוצאות שנבחרו</button></>}
+      </div>
       <div className="expense-list">
-        {filtered.map((expense) => <article className="expense-item" key={expense.id}><div className="expense-category-dot" /><div className="expense-main"><strong>{expense.merchant_name || expense.description}</strong><span>{expense.description && expense.merchant_name ? expense.description : expense.category?.name}</span></div><div className="expense-category">{expense.category?.name ?? categories.find((category) => category.id === expense.category_id)?.name}</div><div className="expense-date">{formatDate(expense.expense_date)}</div><strong className="expense-amount">{formatCurrency(expense.amount, expense.currency)}</strong><div className="expense-actions"><button className="icon-button" onClick={() => onEdit(expense)} aria-label="עריכת הוצאה">✎</button><button className="icon-button danger-icon" onClick={() => onDelete(expense.id)} aria-label="מחיקת הוצאה"><Trash2 size={16} /></button></div></article>)}
+        {filtered.map((expense) => <article className={`expense-item ${selectedIds.has(expense.id) ? "selected" : ""}`} key={expense.id}><label className="expense-checkbox"><input type="checkbox" checked={selectedIds.has(expense.id)} onChange={() => toggleSelected(expense.id)} aria-label={`בחירת ${expense.merchant_name || expense.description || "הוצאה"}`} /></label><div className="expense-category-dot" /><div className="expense-main"><strong>{expense.merchant_name || expense.description}</strong><span>{expense.description && expense.merchant_name ? expense.description : expense.category?.name}</span></div><div className="expense-category">{expense.category?.name ?? categories.find((category) => category.id === expense.category_id)?.name}</div><div className="expense-date">{formatDate(expense.expense_date)}</div><strong className="expense-amount">{formatCurrency(expense.amount, expense.currency)}</strong><div className="expense-actions"><button className="icon-button" onClick={() => onEdit(expense)} aria-label="עריכת הוצאה">✎</button><button className="icon-button danger-icon" onClick={() => onDelete(expense.id)} aria-label="מחיקת הוצאה"><Trash2 size={16} /></button></div></article>)}
         {!filtered.length && <div className="empty-state"><Search size={30} /><h3>לא נמצאו הוצאות</h3><p>נסו לשנות את החיפוש או להוסיף הוצאה חדשה.</p></div>}
       </div>
     </section>
@@ -618,6 +650,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
   const [draftMonth, setDraftMonth] = useState(initialMonth);
   const [dashboardMonth, setDashboardMonth] = useState(initialMonth);
+  const [photoDestination, setPhotoDestination] = useState<"monthly" | "expense">("monthly");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(1);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -791,6 +824,20 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     }
   }
 
+  async function deleteExpenses(ids: string[]) {
+    setAuthError("");
+    if (demoMode) {
+      setExpenses((items) => items.filter((expense) => !ids.includes(expense.id)));
+    } else if (supabase) {
+      const { error } = await supabase.from("expenses").update({ deleted_at: new Date().toISOString() }).in("id", ids);
+      if (error) {
+        setAuthError("מחיקת ההוצאות נכשלה. נסו שוב.");
+        return;
+      }
+      await loadRemoteData();
+    }
+  }
+
   function updateRow(id: string, field: keyof DraftRow, value: string) {
     setDraftRows((rows) => rows.map((row) => row.id === id ? { ...row, [field]: value } : row));
   }
@@ -827,6 +874,50 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         await supabase.storage.from("expense-images").remove([storagePath]);
         throw new Error("שמירת פרטי התמונה נכשלה.");
       }
+    }
+
+    if (photoDestination === "expense") {
+      if (demoMode) {
+        const created = rows.map((row) => ({
+          id: crypto.randomUUID(),
+          household_id: household?.id ?? demoHousehold.id,
+          created_by: "demo-user",
+          merchant_name: row.merchant_name || null,
+          description: row.description || null,
+          amount: Number(row.amount),
+          currency: household?.default_currency ?? "ILS",
+          expense_date: row.expense_date,
+          category_id: row.category_id,
+          payment_method: row.payment_method || null,
+          notes: row.notes || "נוצר מהזנת תמונה",
+          source: "manual",
+          is_historical: false,
+          is_recurring: false,
+          created_at: new Date().toISOString(),
+          category: categories.find((category) => category.id === row.category_id),
+        } as Expense));
+        setExpenses((items) => [...created, ...items]);
+      } else if (supabase && household && userId) {
+        const { error } = await supabase.from("expenses").insert(rows.map((row) => ({
+          household_id: household.id,
+          created_by: userId,
+          merchant_name: row.merchant_name || null,
+          description: row.description || null,
+          amount: Number(row.amount),
+          currency: household.default_currency,
+          expense_date: row.expense_date,
+          category_id: row.category_id,
+          payment_method: row.payment_method || null,
+          notes: row.notes || "נוצר מהזנת תמונה",
+          source: "manual",
+          is_historical: false,
+          is_recurring: false,
+        })));
+        if (error) throw new Error("שמירת ההוצאות מהתמונה נכשלה.");
+        await loadRemoteData();
+      }
+      setView("expenses");
+      return;
     }
 
     setDraftRows((current) => [...current.filter((row) => row.amount || row.description || row.merchant_name), ...rows]);
@@ -935,9 +1026,9 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
   const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} /> :
-    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onEdit={(expense) => { setEditingExpense(expense); setShowExpenseForm(true); }} onDelete={deleteExpense} /> :
+    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onEdit={(expense) => { setEditingExpense(expense); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, initialDate)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
-    view === "photo" ? <NotebookImport categories={categories} initialMonth={initialMonth} onConfirm={acceptNotebookRows} onCancel={() => setView("dashboard")} /> :
+    view === "photo" ? <NotebookImport categories={categories} initialMonth={initialMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onCancel={() => setView("dashboard")} /> :
     <section className="content-section"><div className="section-heading"><div><p className="eyebrow">שמירה להמשך</p><h1>טיוטות חודשיות</h1><p className="muted">הטיוטות נשמרות כדי שאפשר יהיה להמשיך מאוחר יותר.</p></div></div><div className="empty-state"><FileText size={30} /><h3>טיוטה חדשה מתחילה במסך הזנת חודש</h3><button className="primary-button" onClick={() => setView("monthly")}>פתיחת הזנה חודשית</button></div></section>;
 
   return (
@@ -949,7 +1040,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           <button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><Home size={18} /> בית</button>
           <button className={view === "expenses" ? "active" : ""} onClick={() => setView("expenses")}><Receipt size={18} /> הוצאות</button>
           <button className={view === "monthly" ? "active" : ""} onClick={() => setView("monthly")}><FileText size={18} /> הזנת חודש שלם</button>
-          <button className={view === "photo" ? "active" : ""} onClick={() => setView("photo")}><ImagePlus size={18} /> הזנה מתמונה</button>
+          <button className={view === "photo" ? "active" : ""} onClick={() => { setPhotoDestination("monthly"); setView("photo"); }}><ImagePlus size={18} /> הזנה מתמונה</button>
           <button className={view === "drafts" ? "active" : ""} onClick={() => setView("drafts")}><CalendarDays size={18} /> טיוטות</button>
         </nav>
         {supabaseConfigured && (
@@ -968,7 +1059,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         </header>
         <nav className="mobile-nav" aria-label="ניווט ראשי">
           {mobileNavItems.map(({ id, label, Icon }) => (
-            <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}>
+            <button key={id} className={view === id ? "active" : ""} onClick={() => { if (id === "photo") setPhotoDestination("monthly"); setView(id); }} aria-current={view === id ? "page" : undefined}>
               <Icon size={20} /><span>{label}</span>
             </button>
           ))}
@@ -977,7 +1068,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         {authError && <div className="notice danger-notice"><X size={18} />{authError}</div>}
         {currentView}
       </main>
-      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={editingExpense ? { merchant_name: editingExpense.merchant_name ?? "", description: editingExpense.description ?? "", amount: String(editingExpense.amount), expense_date: editingExpense.expense_date, category_id: editingExpense.category_id, payment_method: editingExpense.payment_method ?? "", notes: editingExpense.notes ?? "" } : emptyExpenseForm("", initialDate)} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); }} onSave={saveExpense} /></div></div>}
+      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={editingExpense ? { merchant_name: editingExpense.merchant_name ?? "", description: editingExpense.description ?? "", amount: String(editingExpense.amount), expense_date: editingExpense.expense_date, category_id: editingExpense.category_id, payment_method: editingExpense.payment_method ?? "", notes: editingExpense.notes ?? "" } : emptyExpenseForm("", initialDate)} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); setPhotoDestination("expense"); setView("photo"); }} onSave={saveExpense} /></div></div>}
     </div>
   );
 }

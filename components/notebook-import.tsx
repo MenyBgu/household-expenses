@@ -17,13 +17,14 @@ import {
 type NotebookImportProps = {
   categories: Category[];
   initialMonth: string;
+  destination: "monthly" | "expense";
   onConfirm: (rows: DraftRow[], month: string, file: File, extractedText: string) => Promise<void> | void;
   onCancel: () => void;
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-export function NotebookImport({ categories, initialMonth, onConfirm, onCancel }: NotebookImportProps) {
+export function NotebookImport({ categories, initialMonth, destination, onConfirm, onCancel }: NotebookImportProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [month, setMonth] = useState(initialMonth);
@@ -141,9 +142,9 @@ export function NotebookImport({ categories, initialMonth, onConfirm, onCancel }
     <section className="content-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">העברה מתמונה</p>
-          <h1>צילום דף הוצאות</h1>
-          <p className="muted">המערכת תציע שורות וקטגוריות. שום דבר לא נשמר בלי אישור שלך.</p>
+          <p className="eyebrow">{destination === "expense" ? "הוספה מתמונה" : "העברה מתמונה"}</p>
+          <h1>{destination === "expense" ? "צילום קבלה או הוצאה" : "צילום דף הוצאות"}</h1>
+          <p className="muted">{destination === "expense" ? "אפשר לצלם קבלה אחת או כמה פריטים. המערכת תציע את הפרטים לפני השמירה." : "המערכת תציע שורות וקטגוריות. שום דבר לא נשמר בלי אישור שלך."}</p>
         </div>
         <button className="icon-button" type="button" onClick={onCancel} aria-label="סגירת מסך התמונה">
           <X size={18} />
@@ -219,7 +220,7 @@ export function NotebookImport({ categories, initialMonth, onConfirm, onCancel }
           <div className="form-actions">
             <button className="secondary-button" type="button" onClick={() => { setRows([]); setStatus("idle"); }}><RotateCcw size={17} /> קריאה מחדש</button>
             <button className="primary-button" type="button" disabled={!validRows.length || confirming} onClick={confirmRows}>
-              <Check size={17} /> {confirming ? "שומר את התמונה..." : "אישור והמשך להזנה החודשית"}
+              <Check size={17} /> {confirming ? "שומר את התמונה..." : destination === "expense" ? "אישור ושמירת ההוצאה" : "אישור והמשך להזנה החודשית"}
             </button>
           </div>
         </div>
