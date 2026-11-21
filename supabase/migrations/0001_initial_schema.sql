@@ -859,7 +859,6 @@ alter table public.monthly_entry_drafts enable row level security;
 alter table public.monthly_commit_batches enable row level security;
 alter table public.audit_log enable row level security;
 alter table public.notebook_imports enable row level security;
-alter table storage.objects enable row level security;
 
 -- פרופילים: כל משתמש רואה את עצמו ואת חברי משקי הבית המשותפים לו
 create policy profiles_select on public.profiles for select to authenticated
@@ -960,7 +959,6 @@ create policy expense_images_delete on storage.objects for delete to authenticat
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
 revoke all on all functions in schema public from public, anon, authenticated;
-revoke all on table storage.objects, storage.buckets from anon, authenticated;
 
 grant usage on schema public to authenticated;
 
@@ -974,7 +972,6 @@ grant select, insert, update on public.expenses to authenticated;
 grant select, insert, update, delete on public.monthly_entry_drafts to authenticated;
 grant select on public.audit_log to authenticated;
 grant select, insert, update on public.notebook_imports to authenticated;
-grant select, insert, delete on table storage.objects to authenticated;
 
 grant execute on function public.is_household_member(uuid) to authenticated;
 grant execute on function public.is_household_admin(uuid) to authenticated;
