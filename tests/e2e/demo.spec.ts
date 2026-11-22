@@ -135,4 +135,14 @@ test.describe("מצב הדגמה", () => {
     await page.getByRole("button", { name: "ביטול" }).click();
     await expect(page.getByText("רמי לוי")).toBeVisible();
   });
+
+  test("מאפשר לפתוח הגדרות ולשנות את שם משק הבית", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "הגדרות" }).first().click();
+    await expect(page.getByRole("heading", { name: "הגדרות" })).toBeVisible();
+    await page.getByLabel("שם משק הבית").fill("משפחת ישראלי החדשה");
+    await page.getByRole("button", { name: "שמירת ההגדרות" }).click();
+    await expect(page.getByText("ההגדרות נשמרו בהצלחה")).toBeVisible();
+    await expect(page.getByText("משפחת ישראלי החדשה").first()).toBeVisible();
+  });
 });

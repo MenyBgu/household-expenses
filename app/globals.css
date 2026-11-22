@@ -546,6 +546,56 @@ textarea:focus-visible {
   margin-top: 14px;
 }
 
+.settings-page {
+  max-width: 820px;
+}
+
+.settings-card {
+  margin: 14px 0;
+}
+
+.settings-section-heading {
+  margin-top: 25px;
+}
+
+.settings-category-list {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-category-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.settings-category-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-category-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.category-toggle {
+  min-width: 70px;
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.category-toggle.active {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+}
+
 .insight {
   gap: 9px;
   margin-top: 14px;

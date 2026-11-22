@@ -38,6 +38,7 @@ import {
   Plus,
   Receipt,
   Search,
+  Settings,
   Sparkles,
   Trash2,
   Wallet,
@@ -53,7 +54,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Category, DraftRow, Expense, Household } from "@/lib/types";
 import { draftRowSchema, expenseSchema, householdSchema } from "@/lib/validation";
 
-type View = "dashboard" | "expenses" | "monthly" | "photo" | "drafts";
+type View = "dashboard" | "expenses" | "monthly" | "photo" | "drafts" | "settings";
 
 type YearlyTotal = {
   year: number;
@@ -109,6 +110,26 @@ const legacyPaymentMethods: Record<string, string> = {
   "העברה": "bank_transfer",
   "הוראת קבע": "direct_debit",
 };
+
+const mergedCategoryNames = new Set([
+  "מזון וסופר",
+  "שכירות או משכנתה",
+  "חשמל",
+  "מים",
+  "ארנונה",
+  "גז",
+  "סלולר",
+  "הלוואות",
+  "דלק",
+  "רכב",
+  "תחבורה",
+  "אחזקת הבית",
+  "תרופות",
+  "בריאות",
+  "חופשות ונסיעות",
+  "ביגוד ואופנה",
+  "בעלי מקצוע",
+]);
 
 function toDatabasePaymentMethod(value: string) {
   return legacyPaymentMethods[value] ?? value;
@@ -811,10 +832,116 @@ function ExpensesView({
   );
 }
 
+function SettingsView({
+  household,
+  categories,
+  displayName,
+  canManageHousehold,
+  onSave,
+  onToggleCategory,
+}: {
+  household: Household;
+  categories: Category[];
+  displayName: string;
+  canManageHousehold: boolean;
+  onSave: (values: { name: string; currency: string; displayName: string }) => Promise<void>;
+  onToggleCategory: (id: string, isActive: boolean) => Promise<void>;
+}) {
+  const [name, setName] = useState(household.name);
+  const [currency, setCurrency] = useState(household.default_currency);
+  const [profileName, setProfileName] = useState(displayName);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const manageableCategories = categories.filter((category) => !mergedCategoryNames.has(category.name));
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    const trimmedProfileName = profileName.trim();
+    if (!trimmedName) {
+      setError("יש להזין שם למשק הבית.");
+      return;
+    }
+    if (!trimmedProfileName) {
+      setError("יש להזין שם תצוגה.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      await onSave({ name: trimmedName, currency, displayName: trimmedProfileName });
+      setMessage("ההגדרות נשמרו בהצלחה.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "שמירת ההגדרות נכשלה.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleCategory(category: Category) {
+    setError("");
+    try {
+      await onToggleCategory(category.id, !category.is_active);
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "עדכון הקטגוריה נכשל.");
+    }
+  }
+
+  return (
+    <section className="content-section settings-page">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">שליטה פשוטה במערכת</p>
+          <h1>הגדרות</h1>
+          <p className="muted">דברים בסיסיים בלבד, כדי שהמערכת תישאר ברורה ומהירה.</p>
+        </div>
+        <Settings size={28} className="muted-icon" />
+      </div>
+      <form className="form-card settings-card" onSubmit={save}>
+        <div className="panel-heading"><div><h2>הפרטים שלי</h2><p className="muted">השם שיופיע בתוך האפליקציה.</p></div></div>
+        <label>שם תצוגה<input value={profileName} maxLength={80} onChange={(event) => setProfileName(event.target.value)} /></label>
+        <div className="panel-heading settings-section-heading"><div><h2>משק הבית</h2><p className="muted">הגדרות אלו משותפות לחברי משק הבית.</p></div></div>
+        <label>שם משק הבית<input value={name} maxLength={100} disabled={!canManageHousehold} onChange={(event) => setName(event.target.value)} /></label>
+        <label>מטבע ברירת מחדל
+          <select value={currency} disabled={!canManageHousehold} onChange={(event) => setCurrency(event.target.value)}>
+            <option value="ILS">שקל חדש (₪)</option>
+            <option value="USD">דולר ($)</option>
+            <option value="EUR">אירו (€)</option>
+          </select>
+        </label>
+        {!canManageHousehold && <p className="small muted">רק מנהל משק הבית יכול לשנות את שם המשק והמטבע.</p>}
+        {error && <p className="field-error" role="alert">{error}</p>}
+        {message && <div className="notice success-notice"><Check size={18} />{message}</div>}
+        <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? "שומר..." : "שמירת ההגדרות"}</button></div>
+      </form>
+
+      <article className="panel settings-card">
+        <div className="panel-heading">
+          <div><h2>קטגוריות פעילות</h2><p className="muted">הסתרה מוציאה קטגוריה מהטפסים והגרפים, בלי למחוק הוצאות קיימות.</p></div>
+          <span className="small muted">{manageableCategories.filter((category) => category.is_active).length} פעילות</span>
+        </div>
+        <div className="settings-category-list">
+          {manageableCategories.map((category) => (
+            <div className="settings-category-row" key={category.id}>
+              <span><strong>{category.name}</strong><small>{category.is_active ? "מופיעה בטפסים ובסיכומים" : "מוסתרת, הנתונים נשמרו"}</small></span>
+              <button type="button" className={`secondary-button category-toggle ${category.is_active ? "active" : ""}`} disabled={!canManageHousehold} onClick={() => void toggleCategory(category)} aria-pressed={category.is_active}>
+                {category.is_active ? "הסתרה" : "הפעלה"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </article>
+    </section>
+  );
+}
+
 export default function HouseholdApp({ supabaseConfigured, userId, userEmail, displayName, initialDate, initialMonth }: HouseholdAppProps) {
   const demoMode = !supabaseConfigured;
   const [view, setView] = useState<View>("dashboard");
   const [household, setHousehold] = useState<Household | null>(demoMode ? demoHousehold : null);
+  const [accountDisplayName, setAccountDisplayName] = useState(displayName || displayNameFromEmail(userEmail));
   const [categories, setCategories] = useState<Category[]>(demoMode ? demoCategories : []);
   const [expenses, setExpenses] = useState<Expense[]>(demoMode ? demoExpenses : []);
   const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
@@ -855,7 +982,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           yearWindowStart?: number;
           expensesDateFilter?: string;
         };
-        if (parsed.view && ["dashboard", "expenses", "monthly", "drafts"].includes(parsed.view)) {
+        if (parsed.view && ["dashboard", "expenses", "monthly", "drafts", "settings"].includes(parsed.view)) {
           // Restore the screen context, but never restore an in-progress photo or modal.
           // eslint-disable-next-line react-hooks/set-state-in-effect
           setView(parsed.view);
@@ -936,7 +1063,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
 
     const remoteHousehold: Household = { ...householdData, role: membership.role };
     const [{ data: remoteCategories }, { data: remoteExpenses }, { data: remoteDrafts }, { data: remoteSummary, error: summaryError }, { data: remoteYearlyTotals, error: yearlyTotalsError }] = await Promise.all([
-      supabase.from("categories").select("*").eq("household_id", remoteHousehold.id).eq("is_active", true).order("sort_order"),
+      supabase.from("categories").select("*").eq("household_id", remoteHousehold.id).order("sort_order"),
       supabase.from("expenses").select("*, category:categories(*)").eq("household_id", remoteHousehold.id).is("deleted_at", null).order("expense_date", { ascending: false }).limit(500),
       supabase.from("monthly_entry_drafts").select("id, draft_data, version, month, year").eq("household_id", remoteHousehold.id).eq("status", "draft").order("updated_at", { ascending: false }).limit(1),
       supabase.rpc("expense_summary", {
@@ -1053,6 +1180,45 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     setPhotoDestination(destination);
     setPhotoReturnView(returnView);
     setView("photo");
+  }
+
+  async function saveSettings(values: { name: string; currency: string; displayName: string }) {
+    if (!household) return;
+    if (demoMode) {
+      setHousehold((current) => current ? { ...current, name: values.name, default_currency: values.currency } : current);
+      setAccountDisplayName(values.displayName);
+      return;
+    }
+    if (!supabase || !userId) throw new Error("חיבור המשתמש אינו זמין.");
+    if (household.role === "admin") {
+      const { error } = await supabase
+        .from("households")
+        .update({ name: values.name, default_currency: values.currency })
+        .eq("id", household.id);
+      if (error) throw new Error(`עדכון משק הבית נכשל: ${error.message}`);
+    }
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ display_name: values.displayName })
+      .eq("id", userId);
+    if (profileError) throw new Error(`עדכון שם התצוגה נכשל: ${profileError.message}`);
+    setAccountDisplayName(values.displayName);
+    await loadRemoteData();
+  }
+
+  async function toggleCategory(id: string, isActive: boolean) {
+    if (!household) return;
+    if (isActive === false && categories.filter((category) => category.is_active).length <= 1) {
+      throw new Error("אי אפשר להסתיר את הקטגוריה הפעילה האחרונה.");
+    }
+    if (demoMode) {
+      setCategories((items) => items.map((category) => category.id === id ? { ...category, is_active: isActive } : category));
+      return;
+    }
+    if (!supabase || household.role !== "admin") throw new Error("רק מנהל משק הבית יכול לשנות קטגוריות.");
+    const { error } = await supabase.from("categories").update({ is_active: isActive }).eq("id", id);
+    if (error) throw new Error(`עדכון הקטגוריה נכשל: ${error.message}`);
+    setCategories((items) => items.map((category) => category.id === id ? { ...category, is_active: isActive } : category));
   }
 
   async function createHousehold(name: string) {
@@ -1460,6 +1626,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} initialMonth={initialMonth} dateFilter={expensesDateFilter} onDateFilterChange={setExpensesDateFilter} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setNewExpensePrefill(null); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDuplicate={duplicateExpense} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, `${draftMonth}-01`)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={photoReturnView === "monthly" ? draftMonth : dashboardMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView(photoReturnView)} /> :
+    view === "settings" ? <SettingsView household={household} categories={categories} displayName={accountDisplayName} canManageHousehold={household.role === "admin"} onSave={saveSettings} onToggleCategory={toggleCategory} /> :
     <section className="content-section"><div className="section-heading"><div><p className="eyebrow">שמירה להמשך</p><h1>טיוטות חודשיות</h1><p className="muted">הטיוטות נשמרות כדי שאפשר יהיה להמשיך מאוחר יותר.</p></div></div><div className="empty-state"><FileText size={30} /><h3>טיוטה חדשה מתחילה במסך הזנת חודש</h3><button className="primary-button" onClick={() => setView("monthly")}>פתיחת הזנה חודשית</button></div></section>;
   const expenseFormInitial = editingExpense
     ? {
@@ -1486,6 +1653,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           <button className={view === "monthly" ? "active" : ""} onClick={() => setView("monthly")}><FileText size={18} /> הזנת חודש שלם</button>
           <button className={view === "photo" ? "active" : ""} onClick={() => openPhoto("monthly")}><ImagePlus size={18} /> הזנה מתמונה</button>
           <button className={view === "drafts" ? "active" : ""} onClick={() => setView("drafts")}><CalendarDays size={18} /> טיוטות</button>
+          <button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}><Settings size={18} /> הגדרות</button>
         </nav>
         {supabaseConfigured && (
           <div className="sidebar-bottom">
@@ -1498,6 +1666,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           <strong>הוצאות הבית</strong>
           <div className="mobile-header-actions">
             {supabaseConfigured && <button className="icon-button" onClick={logout} aria-label="התנתקות"><LogOut size={18} /></button>}
+            <button className="icon-button" onClick={() => setView("settings")} aria-label="הגדרות"><Settings size={19} /></button>
             <button className="primary-icon-button" onClick={() => openExpenseForm(view)} aria-label="הוספת הוצאה"><Plus size={19} /></button>
           </div>
         </header>

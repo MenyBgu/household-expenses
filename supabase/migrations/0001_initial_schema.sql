@@ -1009,7 +1009,7 @@ grant usage on schema public to authenticated;
 grant select on public.profiles to authenticated;
 grant update (display_name, avatar_url) on public.profiles to authenticated;
 grant select on public.households to authenticated;
-grant update (name) on public.households to authenticated;
+grant update (name, default_currency) on public.households to authenticated;
 grant select, insert, update, delete on public.household_members to authenticated;
 grant select, insert, update on public.categories to authenticated;
 grant select, insert, update on public.expenses to authenticated;
