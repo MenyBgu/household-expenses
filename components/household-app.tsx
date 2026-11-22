@@ -665,7 +665,7 @@ function ExpensesView({
       <div className="filters-bar">
         <label className="search-field"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש לפי עסק או תיאור" /></label>
         <label><span className="sr-only">חודש</span><input type="month" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>
-        <label><span className="sr-only">קטגוריה</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">כל הקטגוריות</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label><span className="sr-only">קטגוריה</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">כל הקטגוריות</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         {(query || categoryFilter || dateFilter) && <button className="text-button" onClick={() => { setQuery(""); setCategoryFilter(""); setDateFilter(""); }}>ניקוי מסננים</button>}
       </div>
       <div className="selection-toolbar">

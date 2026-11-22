@@ -12,11 +12,13 @@ import { demoCategories } from "@/lib/demo-data";
 import type { Category } from "@/lib/types";
 
 const categories: Category[] = [
-  { id: "fuel", household_id: "house", name: "דלק", is_active: true, sort_order: 1 },
-  { id: "mortgage", household_id: "house", name: "שכירות או משכנתה", is_active: true, sort_order: 2 },
-  { id: "home", household_id: "house", name: "דיור", is_active: true, sort_order: 3 },
+  { id: "transport", household_id: "house", name: "תחבורה ורכב", is_active: true, sort_order: 1 },
+  { id: "home", household_id: "house", name: "דיור", is_active: true, sort_order: 2 },
+  { id: "shopping", household_id: "house", name: "צרכנות וקניות", is_active: true, sort_order: 3 },
   { id: "events", household_id: "house", name: "אירועים", is_active: true, sort_order: 4 },
   { id: "other", household_id: "house", name: "אחר", is_active: true, sort_order: 5 },
+  { id: "bank", household_id: "house", name: "בנק ועמלות", is_active: true, sort_order: 6 },
+  { id: "internet", household_id: "house", name: "תקשורת ואינטרנט", is_active: true, sort_order: 7 },
 ];
 
 describe("קריאת רשימת הוצאות מתמונה", () => {
@@ -30,7 +32,7 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
 
     expect(rows).toHaveLength(4);
     expect(rows.map((row) => row.amount)).toEqual(["200", "1000", "350", "2000"]);
-    expect(rows.map((row) => row.category_id)).toEqual(["fuel", "home", "home", "events"]);
+    expect(rows.map((row) => row.category_id)).toEqual(["transport", "home", "home", "events"]);
     expect(rows[0].expense_date).toBe("2026-12-01");
   });
 
@@ -38,7 +40,7 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
     const rows = parseNotebookText("דלק 200\nועד בית", 2026, 12, categories);
 
     expect(rows[0].description).toBe("דלק");
-    expect(rows[0].category_id).toBe("fuel");
+    expect(rows[0].category_id).toBe("transport");
     expect(rows[1].needsReview).toBe(true);
     expect(rows[1].amount).toBe("");
   });
@@ -48,6 +50,10 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
     expect(suggestCategory("חתונה מאי", categories).categoryId).toBe("events");
     expect(suggestCategory("תחנת דלק", categories).confidence).toBeGreaterThan(0.8);
     expect(suggestCategory("משהו לא מוכר", categories).categoryId).toBe("other");
+    expect(suggestCategory("סופר", categories).categoryId).toBe("shopping");
+    expect(suggestCategory("אחזקת הבית", categories).categoryId).toBe("home");
+    expect(suggestCategory("הלוואה", categories).categoryId).toBe("bank");
+    expect(suggestCategory("סלולר", categories).categoryId).toBe("internet");
   });
 
   it("משחזר רווחים נפוצים ש-OCR מחבר", () => {

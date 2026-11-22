@@ -33,19 +33,24 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     expect(result.rows[0].count).toBe("32");
   });
 
-  it("מסמן קטגוריות דיור מפורטות כלא פעילות", async () => {
+  it("מסמן קטגוריות מאוחדות כלא פעילות ומשנה את שם התחבורה", async () => {
     db = await createTestDb();
     const userId = await createUser(db, "housing");
     const householdId = await createHousehold(db, userId, "משפחת דיור");
 
     await asAdmin(db);
     const result = await db.query<{ name: string; is_active: boolean }>(
-      "select name, is_active from public.categories where household_id = $1 and name in ('שכירות או משכנתה', 'חשמל', 'מים', 'ארנונה', 'גז') order by name",
+      "select name, is_active from public.categories where household_id = $1 and name in ('מזון וסופר', 'שכירות או משכנתה', 'חשמל', 'מים', 'ארנונה', 'גז', 'אחזקת הבית', 'תחבורה', 'דלק', 'רכב', 'הלוואות', 'סלולר') order by name",
       [householdId],
     );
 
-    expect(result.rows).toHaveLength(5);
+    expect(result.rows).toHaveLength(11);
     expect(result.rows.every((category) => !category.is_active)).toBe(true);
+    const renamed = await db.query<{ is_active: boolean }>(
+      "select is_active from public.categories where household_id = $1 and name = 'תחבורה ורכב'",
+      [householdId],
+    );
+    expect(renamed.rows[0].is_active).toBe(true);
   });
 
   it("מונע מחבר לקרוא נתונים ממשק בית אחר", async () => {
@@ -53,7 +58,7 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     const owner = await createUser(db, "owner");
     const outsider = await createUser(db, "outsider");
     const householdId = await createHousehold(db, owner, "בית פרטי");
-    const categoryId = await categoryIdByName(db, owner, householdId, "מזון וסופר");
+    const categoryId = await categoryIdByName(db, owner, householdId, "צרכנות וקניות");
     await insertExpense(db, owner, householdId, {
       categoryId,
       amount: "125.50",
@@ -75,7 +80,7 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     const member = await createUser(db, "member");
     const householdId = await createHousehold(db, owner, "משפחה");
     await addMember(db, owner, householdId, member);
-    const categoryId = await categoryIdByName(db, owner, householdId, "תחבורה");
+    const categoryId = await categoryIdByName(db, owner, householdId, "תחבורה ורכב");
     const expenseId = await insertExpense(db, owner, householdId, {
       categoryId,
       amount: "80",
@@ -126,7 +131,7 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     db = await createTestDb();
     const owner = await createUser(db, "owner");
     const householdId = await createHousehold(db, owner, "משפחה");
-    const categoryId = await categoryIdByName(db, owner, householdId, "דלק");
+    const categoryId = await categoryIdByName(db, owner, householdId, "תחבורה ורכב");
 
     await asUser(db, owner);
     const draft = await db.query<{ id: string }>(
@@ -186,7 +191,7 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     db = await createTestDb();
     const owner = await createUser(db, "owner");
     const householdId = await createHousehold(db, owner, "משפחה");
-    const categoryId = await categoryIdByName(db, owner, householdId, "מזון וסופר");
+    const categoryId = await categoryIdByName(db, owner, householdId, "צרכנות וקניות");
 
     await asUser(db, owner);
     const draft = await db.query<{ id: string }>(

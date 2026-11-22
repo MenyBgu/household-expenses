@@ -364,7 +364,7 @@ begin
     (new.id, 'בנק ועמלות', 'banknote', '#64748b', true, 120),
     (new.id, 'הלוואות', 'hand-coins', '#2563eb', true, 130),
     (new.id, 'ביטוחים', 'shield', '#16a34a', true, 140),
-    (new.id, 'תחבורה', 'bus', '#f59e0b', true, 150),
+    (new.id, 'תחבורה ורכב', 'bus', '#f59e0b', true, 150),
     (new.id, 'דלק', 'fuel', '#dc2626', true, 160),
     (new.id, 'רכב', 'car', '#7c3aed', true, 170),
     (new.id, 'בריאות', 'heart-pulse', '#0891b2', true, 180),
@@ -386,7 +386,19 @@ begin
   update public.categories
   set is_active = false
   where household_id = new.id
-    and name in ('שכירות או משכנתה', 'חשמל', 'מים', 'ארנונה', 'גז');
+    and name in (
+      'מזון וסופר',
+      'שכירות או משכנתה',
+      'חשמל',
+      'מים',
+      'ארנונה',
+      'גז',
+      'סלולר',
+      'הלוואות',
+      'דלק',
+      'רכב',
+      'אחזקת הבית'
+    );
   return new;
 end;
 $$;
