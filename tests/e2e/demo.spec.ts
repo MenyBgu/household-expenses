@@ -92,4 +92,19 @@ test.describe("מצב הדגמה", () => {
     await page.getByRole("checkbox", { name: "בחירת כל ההוצאות המוצגות" }).check();
     await expect(page.getByRole("button", { name: "מחיקת ההוצאות שנבחרו" })).toBeVisible();
   });
+
+  test("שומר את מסנן החודש במסך ההוצאות אחרי עריכה ושמירה", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "הוצאות" }).first().click();
+
+    const monthFilter = page.locator(".filters-bar input[type='month']");
+    await monthFilter.fill("2026-11");
+    await page.locator(".expense-actions .icon-button").first().click();
+    await page.getByLabel("שם העסק").fill("עסק מעודכן");
+    await page.getByRole("button", { name: "שמירת שינויים" }).click();
+
+    await expect(page.getByRole("heading", { name: "הוצאות" })).toBeVisible();
+    await expect(monthFilter).toHaveValue("2026-11");
+    await expect(page.getByText("עסק מעודכן")).toBeVisible();
+  });
 });

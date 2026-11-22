@@ -670,6 +670,8 @@ function Dashboard({
 function ExpensesView({
   expenses,
   categories,
+  dateFilter,
+  onDateFilterChange,
   onAdd,
   onEdit,
   onDelete,
@@ -677,6 +679,8 @@ function ExpensesView({
 }: {
   expenses: Expense[];
   categories: Category[];
+  dateFilter: string;
+  onDateFilterChange: (month: string) => void;
   onAdd: () => void;
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => Promise<void>;
@@ -684,7 +688,6 @@ function ExpensesView({
 }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const filtered = expenses.filter((expense) => {
     const text = `${expense.merchant_name ?? ""} ${expense.description ?? ""}`.toLowerCase();
@@ -721,9 +724,9 @@ function ExpensesView({
       <div className="section-heading"><div><p className="eyebrow">כל הנתונים במקום אחד</p><h1>הוצאות</h1><p className="muted">{filtered.length} תוצאות · {formatCurrency(total)}</p></div><button className="primary-button" onClick={onAdd}><Plus size={18} /> הוספת הוצאה</button></div>
       <div className="filters-bar">
         <label className="search-field"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש לפי עסק או תיאור" /></label>
-        <label><span className="sr-only">חודש</span><input type="month" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>
+        <label><span className="sr-only">חודש</span><input type="month" value={dateFilter} onChange={(event) => onDateFilterChange(event.target.value)} /></label>
         <label><span className="sr-only">קטגוריה</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">כל הקטגוריות</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-        {(query || categoryFilter || dateFilter) && <button className="text-button" onClick={() => { setQuery(""); setCategoryFilter(""); setDateFilter(""); }}>ניקוי מסננים</button>}
+        {(query || categoryFilter || dateFilter) && <button className="text-button" onClick={() => { setQuery(""); setCategoryFilter(""); onDateFilterChange(""); }}>ניקוי מסננים</button>}
       </div>
       <div className="selection-toolbar">
         <label className="checkbox-label"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="בחירת כל ההוצאות המוצגות" /><span>בחירת הכל</span></label>
@@ -748,6 +751,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [dashboardMonth, setDashboardMonth] = useState(initialMonth);
   const [dashboardRange, setDashboardRange] = useState<DashboardRange>("month");
   const [yearWindowStart, setYearWindowStart] = useState(Number(initialMonth.slice(0, 4)) - 4);
+  const [expensesDateFilter, setExpensesDateFilter] = useState("");
   const [photoDestination, setPhotoDestination] = useState<"monthly" | "expense" | "annual">("monthly");
   const [photoReturnView, setPhotoReturnView] = useState<View>("dashboard");
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -776,6 +780,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           dashboardMonth?: string;
           dashboardRange?: DashboardRange;
           yearWindowStart?: number;
+          expensesDateFilter?: string;
         };
         if (parsed.view && ["dashboard", "expenses", "monthly", "drafts"].includes(parsed.view)) {
           // Restore the screen context, but never restore an in-progress photo or modal.
@@ -788,6 +793,9 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         if (parsed.dashboardMonth && /^\d{4}-\d{2}$/.test(parsed.dashboardMonth)) {
           // Local storage is the source of the user's navigation context.
           setDashboardMonth(parsed.dashboardMonth);
+        }
+        if (!parsed.expensesDateFilter || /^\d{4}-\d{2}$/.test(parsed.expensesDateFilter)) {
+          setExpensesDateFilter(parsed.expensesDateFilter ?? "");
         }
         if (parsed.dashboardRange === "month" || parsed.dashboardRange === "year") {
           setDashboardRange(parsed.dashboardRange);
@@ -811,8 +819,9 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
       dashboardMonth,
       dashboardRange,
       yearWindowStart,
+      expensesDateFilter,
     }));
-  }, [dashboardMonth, dashboardRange, draftMonth, uiStateKey, uiStateHydrated, view, yearWindowStart]);
+  }, [dashboardMonth, dashboardRange, draftMonth, expensesDateFilter, uiStateKey, uiStateHydrated, view, yearWindowStart]);
 
   const loadRemoteData = useCallback(async () => {
     if (!supabase || !userId) return;
@@ -1291,7 +1300,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
   const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} range={dashboardRange} onRangeChange={setDashboardRange} yearWindowStart={yearWindowStart} onYearWindowStart={setYearWindowStart} onAdd={() => openExpenseForm("dashboard")} onNavigate={setView} onAnnualPhoto={() => openPhoto("annual", "dashboard")} allTimeTotal={allTimeTotal} yearlyTotals={yearlyTotals} /> :
-    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
+    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} dateFilter={expensesDateFilter} onDateFilterChange={setExpensesDateFilter} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, `${draftMonth}-01`)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={photoReturnView === "monthly" ? draftMonth : dashboardMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView(photoReturnView)} /> :
     <section className="content-section"><div className="section-heading"><div><p className="eyebrow">שמירה להמשך</p><h1>טיוטות חודשיות</h1><p className="muted">הטיוטות נשמרות כדי שאפשר יהיה להמשיך מאוחר יותר.</p></div></div><div className="empty-state"><FileText size={30} /><h3>טיוטה חדשה מתחילה במסך הזנת חודש</h3><button className="primary-button" onClick={() => setView("monthly")}>פתיחת הזנה חודשית</button></div></section>;
