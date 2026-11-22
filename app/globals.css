@@ -333,7 +333,7 @@ button:disabled {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
 }
 
@@ -449,6 +449,18 @@ button:disabled {
   grid-template-columns: 1.5fr 1fr;
   gap: 14px;
   margin-top: 14px;
+}
+
+.annual-comparison-panel {
+  margin-top: 14px;
+}
+
+.year-comparison-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-bottom: 0.5rem;
 }
 
 .panel,

@@ -52,7 +52,7 @@ supabase/migrations/0001_initial_schema.sql
 ```
 
 אפשר להריץ אותו דרך SQL Editor של Supabase או באמצעות Supabase CLI.
-אם הסכימה כבר הופעלה בעבר, יש להריץ גם את `supabase/migrations/0002_add_events_category.sql`, את `supabase/migrations/0003_merge_housing_categories.sql` ואת `supabase/migrations/0004_merge_expense_categories.sql`.
+אם הסכימה כבר הופעלה בעבר, יש להריץ גם את `supabase/migrations/0002_add_events_category.sql`, את `supabase/migrations/0003_merge_housing_categories.sql`, את `supabase/migrations/0004_merge_expense_categories.sql` ואת `supabase/migrations/0005_add_yearly_totals.sql`.
 
 5. ב-Supabase פתחו את Authentication → Providers והפעילו Google.
 6. הגדירו ב-Google Cloud OAuth Client:

@@ -53,6 +53,12 @@ import { draftRowSchema, expenseSchema, householdSchema } from "@/lib/validation
 
 type View = "dashboard" | "expenses" | "monthly" | "photo" | "drafts";
 
+type YearlyTotal = {
+  year: number;
+  total: number;
+  count: number;
+};
+
 const mobileNavItems: Array<{ id: View; label: string; Icon: typeof Home }> = [
   { id: "dashboard", label: "בית", Icon: Home },
   { id: "expenses", label: "הוצאות", Icon: Receipt },
@@ -485,6 +491,7 @@ function Dashboard({
   onNavigate,
   onAnnualPhoto,
   allTimeTotal,
+  yearlyTotals,
 }: {
   expenses: Expense[];
   categories: Category[];
@@ -494,10 +501,13 @@ function Dashboard({
   onNavigate: (view: View) => void;
   onAnnualPhoto: () => void;
   allTimeTotal: number | null | undefined;
+  yearlyTotals: YearlyTotal[] | null | undefined;
 }) {
   const [range, setRange] = useState<"month" | "year">("month");
+  const [yearWindowStart, setYearWindowStart] = useState(Number(selectedMonth.slice(0, 4)) - 4);
   const displayedAllTimeTotal = allTimeTotal === undefined ? sumMoney(expenses.map((expense) => expense.amount)) : allTimeTotal;
   const selectedYear = selectedMonth.slice(0, 4);
+  const selectedYearNumber = Number(selectedYear);
   const monthExpenses = expenses.filter((expense) => expense.expense_date.startsWith(selectedMonth));
   const previousMonth = expenses.filter((expense) => expense.expense_date.startsWith(previousIsoMonth(selectedMonth)));
   const yearExpenses = expenses.filter((expense) => expense.expense_date.startsWith(`${selectedYear}-`));
@@ -532,6 +542,31 @@ function Dashboard({
     name: category.name,
     amount: sumMoney(yearExpenses.filter((expense) => expense.category_id === category.id).map((expense) => expense.amount)),
   })).filter((category) => category.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);
+  const localYearlyTotals = Array.from(new Set(expenses.map((expense) => Number(expense.expense_date.slice(0, 4)))))
+    .filter((year) => Number.isInteger(year))
+    .map((year) => ({
+      year,
+      total: sumMoney(expenses.filter((expense) => expense.expense_date.startsWith(`${year}-`)).map((expense) => expense.amount)),
+      count: expenses.filter((expense) => expense.expense_date.startsWith(`${year}-`)).length,
+    }));
+  const comparisonSource = yearlyTotals ?? localYearlyTotals;
+  const totalsByYear = new Map(comparisonSource.map((item) => [item.year, item]));
+  const sourceYears = comparisonSource.map((item) => item.year);
+  const firstComparisonYear = Math.min(selectedYearNumber, ...(sourceYears.length ? sourceYears : [selectedYearNumber]));
+  const lastComparisonYear = Math.max(selectedYearNumber, ...(sourceYears.length ? sourceYears : [selectedYearNumber]));
+  const maxWindowStart = Math.max(firstComparisonYear, lastComparisonYear - 9);
+  const comparisonStart = Math.min(Math.max(yearWindowStart, firstComparisonYear), maxWindowStart);
+  const comparisonYears = Array.from(
+    { length: Math.min(10, lastComparisonYear - firstComparisonYear + 1) },
+    (_, index) => comparisonStart + index,
+  );
+  const comparisonData = comparisonYears.map((year) => ({
+    year,
+    amount: totalsByYear.get(year)?.total ?? 0,
+    count: totalsByYear.get(year)?.count ?? 0,
+  }));
+  const hasPreviousComparisonWindow = comparisonStart > firstComparisonYear;
+  const hasNextComparisonWindow = comparisonStart < maxWindowStart;
 
   return (
     <section className="content-section">
@@ -594,6 +629,20 @@ function Dashboard({
               {annualByCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={annualByCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" fill="#36a269" radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הסיכום השנתי.</p></div>}
             </article>
           </div>
+          <article className="panel chart-panel annual-comparison-panel">
+            <div className="panel-heading">
+              <div><h2>השוואת הוצאות בין שנים</h2><p className="muted">עד 10 שנים רצופות, לפי השנה שנבחרה</p></div>
+              <BarChart3 size={20} className="muted-icon" />
+            </div>
+            <div className="year-comparison-toolbar">
+              <button className="icon-button" type="button" onClick={() => setYearWindowStart(comparisonStart - 10)} disabled={!hasPreviousComparisonWindow} aria-label="שנים קודמות"><ChevronRight size={18} /></button>
+              <strong>{comparisonYears[0]}–{comparisonYears.at(-1)}</strong>
+              <button className="icon-button" type="button" onClick={() => setYearWindowStart(comparisonStart + 10)} disabled={!hasNextComparisonWindow} aria-label="שנים הבאות"><ChevronLeft size={18} /></button>
+            </div>
+            {comparisonData.some((item) => item.amount > 0) ? (
+              <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={comparisonData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" /><XAxis dataKey="year" stroke="var(--muted)" fontSize={11} /><YAxis stroke="var(--muted)" fontSize={11} tickFormatter={(value) => `${value} ₪`} /><Tooltip formatter={(value) => formatCurrency(Number(value))} labelFormatter={(label) => `שנת ${label}`} /><Bar dataKey="amount" name="סך שנתי" radius={[5, 5, 0, 0]}>{comparisonData.map((entry) => <Cell key={entry.year} fill={entry.year === selectedYearNumber ? "#3b5ccc" : "#9aaae0"} />)}</Bar></BarChart></ResponsiveContainer></div>
+            ) : <div className="empty-state"><BarChart3 size={30} /><p>אין נתונים להשוואה בשנים האלו.</p></div>}
+          </article>
           <div className="insight"><Sparkles size={19} /><span>{annualTotal ? `בשנת ${selectedYear} נרשמו ${yearExpenses.length} הוצאות בסכום כולל של ${formatCurrency(annualTotal)}.` : "עדיין אין הוצאות לשנה הזו. אפשר לבחור שנה אחרת או להוסיף הוצאה."}</span></div>
         </>
       )}
@@ -697,6 +746,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [loading, setLoading] = useState(!demoMode && Boolean(userId));
   const [authError, setAuthError] = useState("");
   const [allTimeTotal, setAllTimeTotal] = useState<number | null | undefined>(demoMode ? undefined : null);
+  const [yearlyTotals, setYearlyTotals] = useState<YearlyTotal[] | null | undefined>(demoMode ? undefined : null);
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
@@ -733,7 +783,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     }
 
     const remoteHousehold: Household = { ...householdData, role: membership.role };
-    const [{ data: remoteCategories }, { data: remoteExpenses }, { data: remoteDrafts }, { data: remoteSummary, error: summaryError }] = await Promise.all([
+    const [{ data: remoteCategories }, { data: remoteExpenses }, { data: remoteDrafts }, { data: remoteSummary, error: summaryError }, { data: remoteYearlyTotals, error: yearlyTotalsError }] = await Promise.all([
       supabase.from("categories").select("*").eq("household_id", remoteHousehold.id).eq("is_active", true).order("sort_order"),
       supabase.from("expenses").select("*, category:categories(*)").eq("household_id", remoteHousehold.id).is("deleted_at", null).order("expense_date", { ascending: false }).limit(500),
       supabase.from("monthly_entry_drafts").select("id, draft_data, version, month, year").eq("household_id", remoteHousehold.id).eq("status", "draft").order("updated_at", { ascending: false }).limit(1),
@@ -747,12 +797,18 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         p_deleted: false,
         p_missing_info: false,
       }),
+      supabase.rpc("expense_yearly_totals", { p_household_id: remoteHousehold.id }),
     ]);
     setHousehold(remoteHousehold);
     setCategories((remoteCategories ?? []) as Category[]);
     setExpenses((remoteExpenses ?? []) as Expense[]);
     const summaryRow = Array.isArray(remoteSummary) ? remoteSummary[0] as { total_amount?: number | string } | undefined : undefined;
     setAllTimeTotal(summaryError ? null : Number(summaryRow?.total_amount ?? 0));
+    setYearlyTotals(yearlyTotalsError ? null : (remoteYearlyTotals ?? []).map((item: { year: number; total_amount: number | string; item_count: number | string }) => ({
+      year: Number(item.year),
+      total: Number(item.total_amount),
+      count: Number(item.item_count),
+    })));
     const activeDraft = remoteDrafts?.[0] as { id: string; version?: number; month?: number; year?: number; draft_data?: { rows?: DraftRow[] } } | undefined;
     setDraftId(activeDraft?.id ?? null);
     setDraftVersion(activeDraft?.version ?? 1);
@@ -1156,7 +1212,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (loading) return <main className="login-page"><div className="loading-state"><div className="spinner" /><p>טוען את נתוני משק הבית...</p></div></main>;
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
-  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} onAnnualPhoto={() => { setPhotoDestination("annual"); setView("photo"); }} allTimeTotal={allTimeTotal} /> :
+  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} onAnnualPhoto={() => { setPhotoDestination("annual"); setView("photo"); }} allTimeTotal={allTimeTotal} yearlyTotals={yearlyTotals} /> :
     view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onEdit={(expense) => { setEditingExpense(expense); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, initialDate)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={initialMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView("dashboard")} /> :

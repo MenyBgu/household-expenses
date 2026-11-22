@@ -53,6 +53,37 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     expect(renamed.rows[0].is_active).toBe(true);
   });
 
+  it("מסכם הוצאות לפי שנה במסד הנתונים", async () => {
+    db = await createTestDb();
+    const owner = await createUser(db, "yearly");
+    const householdId = await createHousehold(db, owner, "סיכום שנתי");
+    const categoryId = await categoryIdByName(db, owner, householdId, "דיור");
+
+    await insertExpense(db, owner, householdId, {
+      categoryId,
+      amount: "100",
+      date: "2024-06-01",
+      merchant: "חשמל",
+    });
+    await insertExpense(db, owner, householdId, {
+      categoryId,
+      amount: "250",
+      date: "2025-06-01",
+      merchant: "מים",
+    });
+
+    await asUser(db, owner);
+    const result = await db.query<{ year: number; total_amount: string; item_count: string }>(
+      "select year, total_amount::text, item_count::text from public.expense_yearly_totals($1) order by year",
+      [householdId],
+    );
+
+    expect(result.rows).toEqual([
+      { year: 2024, total_amount: "100.00", item_count: "1" },
+      { year: 2025, total_amount: "250.00", item_count: "1" },
+    ]);
+  });
+
   it("מונע מחבר לקרוא נתונים ממשק בית אחר", async () => {
     db = await createTestDb();
     const owner = await createUser(db, "owner");

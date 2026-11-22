@@ -41,6 +41,7 @@ test.describe("מצב הדגמה", () => {
     await page.getByRole("tab", { name: "שנתי" }).click();
     await expect(page.getByText(/סיכום שנת 20\d{2}/)).toBeVisible();
     await expect(page.getByText("מגמת ההוצאות השנתית")).toBeVisible();
+    await expect(page.getByText("השוואת הוצאות בין שנים")).toBeVisible();
   });
 
   test("מאפשר להתחיל הוספת הוצאה גם מתמונה", async ({ page }) => {

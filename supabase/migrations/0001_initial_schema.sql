@@ -862,6 +862,23 @@ as $$
   order by sum(e.amount) desc, e.category_id;
 $$;
 
+create or replace function public.expense_yearly_totals(p_household_id uuid)
+returns table (year integer, total_amount numeric, item_count bigint)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select extract(year from e.expense_date)::integer,
+         sum(e.amount)::numeric(14, 2),
+         count(*)
+  from public.expenses e
+  where e.household_id = p_household_id
+    and e.deleted_at is null
+  group by extract(year from e.expense_date)::integer
+  order by extract(year from e.expense_date)::integer;
+$$;
+
 -- ---------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------
@@ -999,3 +1016,4 @@ grant execute on function public.expense_search(uuid, date, date, uuid, text, nu
 grant execute on function public.expense_summary(uuid, date, date, uuid, text, numeric, boolean, boolean) to authenticated;
 grant execute on function public.expense_daily_totals(uuid, date, date) to authenticated;
 grant execute on function public.expense_category_totals(uuid, date, date) to authenticated;
+grant execute on function public.expense_yearly_totals(uuid) to authenticated;
