@@ -37,7 +37,12 @@ test.describe("מצב הדגמה", () => {
 
     await expect(page.getByRole("tab", { name: "חודשי" })).toHaveAttribute("aria-selected", "true");
     await page.getByRole("button", { name: "חודש קודם" }).click();
-    await expect(page.getByRole("textbox", { name: "בחירת חודש לניתוח" })).toHaveValue(/2026-10|2026-11/);
+    const monthPicker = page.getByRole("textbox", { name: "בחירת חודש לניתוח" });
+    await expect(monthPicker).toHaveValue(/2026-10|2026-11/);
+    const selectedMonth = await monthPicker.inputValue();
+    await page.getByRole("button", { name: "הוצאות" }).first().click();
+    await page.getByRole("button", { name: "בית" }).first().click();
+    await expect(monthPicker).toHaveValue(selectedMonth);
     await page.getByRole("tab", { name: "שנתי" }).click();
     await expect(page.getByText(/סיכום שנת 20\d{2}/)).toBeVisible();
     await expect(page.getByText("מגמת ההוצאות השנתית")).toBeVisible();

@@ -11,6 +11,8 @@
   --success: #087443;
   --warning: #a15c00;
   --danger: #b42318;
+  --shadow-sm: 0 2px 10px rgb(16 24 40 / 5%);
+  --shadow-panel: 0 8px 24px rgb(16 24 40 / 5%);
 }
 
 @theme inline {
@@ -47,6 +49,7 @@ body {
   color: var(--foreground);
   font-family: Arial, "Noto Sans Hebrew", sans-serif;
   margin: 0;
+  overflow-x: hidden;
 }
 
 button,
@@ -63,6 +66,14 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  outline-offset: 2px;
 }
 
 ::selection {
@@ -343,6 +354,7 @@ button:disabled {
   border-radius: 15px;
   background: var(--surface);
   min-height: 155px;
+  box-shadow: var(--shadow-sm);
 }
 
 .stat-card.blue { border-top: 3px solid #3b5ccc; }
@@ -469,6 +481,7 @@ button:disabled {
   border-radius: 15px;
   background: var(--surface);
   padding: 20px;
+  box-shadow: var(--shadow-panel);
 }
 
 .panel-heading {
@@ -948,7 +961,7 @@ textarea {
   z-index: 20;
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
   background: rgb(15 23 42 / 45%);
 }
 
@@ -1168,17 +1181,21 @@ textarea {
   }
 
   .main-area {
-    padding: 0 14px 92px;
+    padding: 0 14px calc(92px + env(safe-area-inset-bottom));
   }
 
   .mobile-header {
     display: flex;
     justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
     height: 58px;
     margin: 0 -14px;
     padding: 0 14px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    box-shadow: 0 2px 8px rgb(16 24 40 / 4%);
   }
 
   .top-banner {
@@ -1217,6 +1234,10 @@ textarea {
   .month-navigation {
     justify-content: space-between;
     flex-wrap: wrap;
+    padding: 7px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
   }
 
   .month-navigation strong {
@@ -1226,6 +1247,13 @@ textarea {
 
   .month-navigation input {
     width: 100%;
+  }
+
+  .month-navigation .icon-button,
+  .mobile-header .icon-button,
+  .mobile-header .primary-icon-button {
+    width: 44px;
+    height: 44px;
   }
 
   .year-picker {
@@ -1244,6 +1272,22 @@ textarea {
   .panel,
   .form-card {
     padding: 15px;
+  }
+
+  .modal-backdrop {
+    place-items: start center;
+    padding: max(10px, env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 
   .form-grid {
@@ -1358,5 +1402,9 @@ textarea {
 
   .login-card h1 {
     font-size: 26px;
+  }
+
+  .chart-box {
+    height: 230px;
   }
 }

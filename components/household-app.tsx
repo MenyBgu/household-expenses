@@ -59,6 +59,8 @@ type YearlyTotal = {
   count: number;
 };
 
+type DashboardRange = "month" | "year";
+
 const mobileNavItems: Array<{ id: View; label: string; Icon: typeof Home }> = [
   { id: "dashboard", label: "בית", Icon: Home },
   { id: "expenses", label: "הוצאות", Icon: Receipt },
@@ -487,6 +489,10 @@ function Dashboard({
   categories,
   selectedMonth,
   onMonthChange,
+  range,
+  onRangeChange,
+  yearWindowStart,
+  onYearWindowStart,
   onAdd,
   onNavigate,
   onAnnualPhoto,
@@ -497,14 +503,16 @@ function Dashboard({
   categories: Category[];
   selectedMonth: string;
   onMonthChange: (month: string) => void;
+  range: DashboardRange;
+  onRangeChange: (range: DashboardRange) => void;
+  yearWindowStart: number;
+  onYearWindowStart: (year: number) => void;
   onAdd: () => void;
   onNavigate: (view: View) => void;
   onAnnualPhoto: () => void;
   allTimeTotal: number | null | undefined;
   yearlyTotals: YearlyTotal[] | null | undefined;
 }) {
-  const [range, setRange] = useState<"month" | "year">("month");
-  const [yearWindowStart, setYearWindowStart] = useState(Number(selectedMonth.slice(0, 4)) - 4);
   const displayedAllTimeTotal = allTimeTotal === undefined ? sumMoney(expenses.map((expense) => expense.amount)) : allTimeTotal;
   const selectedYear = selectedMonth.slice(0, 4);
   const selectedYearNumber = Number(selectedYear);
@@ -576,8 +584,8 @@ function Dashboard({
       </div>
       <div className="analytics-toolbar">
         <div className="range-tabs" role="tablist" aria-label="טווח ניתוח">
-          <button className={range === "month" ? "active" : ""} role="tab" aria-selected={range === "month"} onClick={() => setRange("month")}>חודשי</button>
-          <button className={range === "year" ? "active" : ""} role="tab" aria-selected={range === "year"} onClick={() => setRange("year")}>שנתי</button>
+          <button className={range === "month" ? "active" : ""} role="tab" aria-selected={range === "month"} onClick={() => onRangeChange("month")}>חודשי</button>
+          <button className={range === "year" ? "active" : ""} role="tab" aria-selected={range === "year"} onClick={() => onRangeChange("year")}>שנתי</button>
         </div>
         {range === "month" && (
           <div className="month-navigation">
@@ -635,9 +643,9 @@ function Dashboard({
               <BarChart3 size={20} className="muted-icon" />
             </div>
             <div className="year-comparison-toolbar">
-              <button className="icon-button" type="button" onClick={() => setYearWindowStart(comparisonStart - 10)} disabled={!hasPreviousComparisonWindow} aria-label="שנים קודמות"><ChevronRight size={18} /></button>
+              <button className="icon-button" type="button" onClick={() => onYearWindowStart(comparisonStart - 10)} disabled={!hasPreviousComparisonWindow} aria-label="שנים קודמות"><ChevronRight size={18} /></button>
               <strong>{comparisonYears[0]}–{comparisonYears.at(-1)}</strong>
-              <button className="icon-button" type="button" onClick={() => setYearWindowStart(comparisonStart + 10)} disabled={!hasNextComparisonWindow} aria-label="שנים הבאות"><ChevronLeft size={18} /></button>
+              <button className="icon-button" type="button" onClick={() => onYearWindowStart(comparisonStart + 10)} disabled={!hasNextComparisonWindow} aria-label="שנים הבאות"><ChevronLeft size={18} /></button>
             </div>
             {comparisonData.some((item) => item.amount > 0) ? (
               <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={comparisonData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" /><XAxis dataKey="year" stroke="var(--muted)" fontSize={11} /><YAxis stroke="var(--muted)" fontSize={11} tickFormatter={(value) => `${value} ₪`} /><Tooltip formatter={(value) => formatCurrency(Number(value))} labelFormatter={(label) => `שנת ${label}`} /><Bar dataKey="amount" name="סך שנתי" radius={[5, 5, 0, 0]}>{comparisonData.map((entry) => <Cell key={entry.year} fill={entry.year === selectedYearNumber ? "#3b5ccc" : "#9aaae0"} />)}</Bar></BarChart></ResponsiveContainer></div>
@@ -738,17 +746,62 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
   const [draftMonth, setDraftMonth] = useState(initialMonth);
   const [dashboardMonth, setDashboardMonth] = useState(initialMonth);
+  const [dashboardRange, setDashboardRange] = useState<DashboardRange>("month");
+  const [yearWindowStart, setYearWindowStart] = useState(Number(initialMonth.slice(0, 4)) - 4);
   const [photoDestination, setPhotoDestination] = useState<"monthly" | "expense" | "annual">("monthly");
+  const [photoReturnView, setPhotoReturnView] = useState<View>("dashboard");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(1);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [expenseFormReturnView, setExpenseFormReturnView] = useState<View>("expenses");
+  const [newExpenseDate, setNewExpenseDate] = useState(initialDate);
   const [loading, setLoading] = useState(!demoMode && Boolean(userId));
   const [authError, setAuthError] = useState("");
   const [allTimeTotal, setAllTimeTotal] = useState<number | null | undefined>(demoMode ? undefined : null);
   const [yearlyTotals, setYearlyTotals] = useState<YearlyTotal[] | null | undefined>(demoMode ? undefined : null);
+  const [uiStateHydrated, setUiStateHydrated] = useState(false);
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
+  const uiStateKey = `household-expenses-ui-${userId ?? (demoMode ? "demo" : "guest")}`;
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(uiStateKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as {
+          dashboardMonth?: string;
+          dashboardRange?: DashboardRange;
+          yearWindowStart?: number;
+        };
+        if (parsed.dashboardMonth && /^\d{4}-\d{2}$/.test(parsed.dashboardMonth)) {
+          // Local storage is the source of the user's navigation context.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setDashboardMonth(parsed.dashboardMonth);
+        }
+        if (parsed.dashboardRange === "month" || parsed.dashboardRange === "year") {
+          setDashboardRange(parsed.dashboardRange);
+        }
+        if (typeof parsed.yearWindowStart === "number" && Number.isInteger(parsed.yearWindowStart)) {
+          setYearWindowStart(parsed.yearWindowStart);
+        }
+      } catch {
+        window.localStorage.removeItem(uiStateKey);
+      }
+    }
+    // Restore navigation context once, without restoring a modal or an upload in progress.
+    setUiStateHydrated(true);
+  }, [uiStateKey]);
+
+  useEffect(() => {
+    if (!uiStateHydrated) return;
+    window.localStorage.setItem(uiStateKey, JSON.stringify({
+      dashboardMonth,
+      dashboardRange,
+      yearWindowStart,
+    }));
+  }, [dashboardMonth, dashboardRange, uiStateKey, uiStateHydrated, yearWindowStart]);
 
   const loadRemoteData = useCallback(async () => {
     if (!supabase || !userId) return;
@@ -870,6 +923,20 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     window.location.reload();
   }
 
+  function openExpenseForm(returnView: View = view) {
+    setEditingExpense(null);
+    setExpenseFormReturnView(returnView);
+    const contextMonth = returnView === "dashboard" ? dashboardMonth : returnView === "monthly" ? draftMonth : "";
+    setNewExpenseDate(contextMonth ? `${contextMonth}-01` : initialDate);
+    setShowExpenseForm(true);
+  }
+
+  function openPhoto(destination: "monthly" | "expense" | "annual", returnView: View = view) {
+    setPhotoDestination(destination);
+    setPhotoReturnView(returnView);
+    setView("photo");
+  }
+
   async function createHousehold(name: string) {
     if (demoMode) {
       setHousehold({ ...demoHousehold, name });
@@ -914,7 +981,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     }
     setShowExpenseForm(false);
     setEditingExpense(null);
-    setView("expenses");
+    setView(expenseFormReturnView);
   }
 
   async function deleteExpense(id: string) {
@@ -1103,7 +1170,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         if (error) throw new Error("שמירת ההוצאות מהתמונה נכשלה.");
         await loadRemoteData();
       }
-      setView("expenses");
+      setView(photoReturnView);
       return;
     }
 
@@ -1212,10 +1279,10 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (loading) return <main className="login-page"><div className="loading-state"><div className="spinner" /><p>טוען את נתוני משק הבית...</p></div></main>;
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
-  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} onAnnualPhoto={() => { setPhotoDestination("annual"); setView("photo"); }} allTimeTotal={allTimeTotal} yearlyTotals={yearlyTotals} /> :
-    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onEdit={(expense) => { setEditingExpense(expense); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
-    view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, initialDate)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
-    view === "photo" ? <NotebookImport categories={categories} initialMonth={initialMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView("dashboard")} /> :
+  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} range={dashboardRange} onRangeChange={setDashboardRange} yearWindowStart={yearWindowStart} onYearWindowStart={setYearWindowStart} onAdd={() => openExpenseForm("dashboard")} onNavigate={setView} onAnnualPhoto={() => openPhoto("annual", "dashboard")} allTimeTotal={allTimeTotal} yearlyTotals={yearlyTotals} /> :
+    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
+    view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, `${draftMonth}-01`)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
+    view === "photo" ? <NotebookImport categories={categories} initialMonth={photoReturnView === "monthly" ? draftMonth : dashboardMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView(photoReturnView)} /> :
     <section className="content-section"><div className="section-heading"><div><p className="eyebrow">שמירה להמשך</p><h1>טיוטות חודשיות</h1><p className="muted">הטיוטות נשמרות כדי שאפשר יהיה להמשיך מאוחר יותר.</p></div></div><div className="empty-state"><FileText size={30} /><h3>טיוטה חדשה מתחילה במסך הזנת חודש</h3><button className="primary-button" onClick={() => setView("monthly")}>פתיחת הזנה חודשית</button></div></section>;
 
   return (
@@ -1227,7 +1294,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           <button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><Home size={18} /> בית</button>
           <button className={view === "expenses" ? "active" : ""} onClick={() => setView("expenses")}><Receipt size={18} /> הוצאות</button>
           <button className={view === "monthly" ? "active" : ""} onClick={() => setView("monthly")}><FileText size={18} /> הזנת חודש שלם</button>
-          <button className={view === "photo" ? "active" : ""} onClick={() => { setPhotoDestination("monthly"); setView("photo"); }}><ImagePlus size={18} /> הזנה מתמונה</button>
+          <button className={view === "photo" ? "active" : ""} onClick={() => openPhoto("monthly")}><ImagePlus size={18} /> הזנה מתמונה</button>
           <button className={view === "drafts" ? "active" : ""} onClick={() => setView("drafts")}><CalendarDays size={18} /> טיוטות</button>
         </nav>
         {supabaseConfigured && (
@@ -1241,12 +1308,12 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
           <strong>הוצאות הבית</strong>
           <div className="mobile-header-actions">
             {supabaseConfigured && <button className="icon-button" onClick={logout} aria-label="התנתקות"><LogOut size={18} /></button>}
-            <button className="primary-icon-button" onClick={() => { setEditingExpense(null); setShowExpenseForm(true); }} aria-label="הוספת הוצאה"><Plus size={19} /></button>
+            <button className="primary-icon-button" onClick={() => openExpenseForm(view)} aria-label="הוספת הוצאה"><Plus size={19} /></button>
           </div>
         </header>
         <nav className="mobile-nav" aria-label="ניווט ראשי">
           {mobileNavItems.map(({ id, label, Icon }) => (
-            <button key={id} className={view === id ? "active" : ""} onClick={() => { if (id === "photo") setPhotoDestination("monthly"); setView(id); }} aria-current={view === id ? "page" : undefined}>
+            <button key={id} className={view === id ? "active" : ""} onClick={() => { if (id === "photo") openPhoto("monthly"); else setView(id); }} aria-current={view === id ? "page" : undefined}>
               <Icon size={20} /><span>{label}</span>
             </button>
           ))}
@@ -1255,7 +1322,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         {authError && <div className="notice danger-notice"><X size={18} />{authError}</div>}
         {currentView}
       </main>
-      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={editingExpense ? { merchant_name: editingExpense.merchant_name ?? "", description: editingExpense.description ?? "", amount: String(editingExpense.amount), expense_date: editingExpense.expense_date, category_id: editingExpense.category_id, payment_method: editingExpense.payment_method ?? "", notes: editingExpense.notes ?? "" } : emptyExpenseForm("", initialDate)} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); setPhotoDestination("expense"); setView("photo"); }} onSave={saveExpense} /></div></div>}
+      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={editingExpense ? { merchant_name: editingExpense.merchant_name ?? "", description: editingExpense.description ?? "", amount: String(editingExpense.amount), expense_date: editingExpense.expense_date, category_id: editingExpense.category_id, payment_method: editingExpense.payment_method ?? "", notes: editingExpense.notes ?? "" } : emptyExpenseForm("", newExpenseDate)} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); openPhoto("expense", expenseFormReturnView); }} onSave={saveExpense} /></div></div>}
     </div>
   );
 }
