@@ -484,6 +484,7 @@ function Dashboard({
   onAdd,
   onNavigate,
   onAnnualPhoto,
+  allTimeTotal,
 }: {
   expenses: Expense[];
   categories: Category[];
@@ -492,8 +493,10 @@ function Dashboard({
   onAdd: () => void;
   onNavigate: (view: View) => void;
   onAnnualPhoto: () => void;
+  allTimeTotal: number | null | undefined;
 }) {
   const [range, setRange] = useState<"month" | "year">("month");
+  const displayedAllTimeTotal = allTimeTotal === undefined ? sumMoney(expenses.map((expense) => expense.amount)) : allTimeTotal;
   const selectedYear = selectedMonth.slice(0, 4);
   const monthExpenses = expenses.filter((expense) => expense.expense_date.startsWith(selectedMonth));
   const previousMonth = expenses.filter((expense) => expense.expense_date.startsWith(previousIsoMonth(selectedMonth)));
@@ -558,6 +561,7 @@ function Dashboard({
             <StatCard title="לעומת החודש הקודם" value={change === null ? "אין נתונים" : `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`} helper={previousTotal ? formatCurrency(previousTotal) : "לא קיימים נתוני השוואה"} icon={change !== null && change >= 0 ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />} tone={change !== null && change > 0 ? "orange" : "green"} />
             <StatCard title="הקטגוריה הגדולה" value={largest?.name ?? "אין עדיין"} helper={largest ? formatCurrency(largest.amount) : "הוסיפו הוצאה כדי לראות"} icon={<BarChart3 size={20} />} tone="purple" />
             <StatCard title="הוצאות היסטוריות" value={String(monthExpenses.filter((expense) => expense.is_historical).length)} helper="הועברו מהמחברת" icon={<FileText size={20} />} tone="blue" />
+            <StatCard title="סך כל ההוצאות" value={displayedAllTimeTotal === null ? "לא זמין" : formatCurrency(displayedAllTimeTotal)} helper="מצטבר מכל השנים" icon={<Wallet size={20} />} tone="blue" />
           </div>
           <div className="dashboard-grid">
             <article className="panel chart-panel">
@@ -578,6 +582,7 @@ function Dashboard({
             <StatCard title="ממוצע לחודש פעיל" value={annualAverage.length ? formatCurrency(annualTotal / annualAverage.length) : "אין נתונים"} helper={`${annualAverage.length} חודשים עם הוצאות`} icon={<BarChart3 size={20} />} tone="green" />
             <StatCard title="החודש היקר ביותר" value={highestMonth?.amount ? highestMonth.label : "אין עדיין"} helper={highestMonth?.amount ? formatCurrency(highestMonth.amount) : "הוסיפו הוצאות כדי לראות"} icon={<ArrowUpRight size={20} />} tone="orange" />
             <StatCard title="קטגוריה מובילה" value={annualByCategory[0]?.name ?? "אין עדיין"} helper={annualByCategory[0] ? formatCurrency(annualByCategory[0].amount) : "אין נתונים"} icon={<BarChart3 size={20} />} tone="purple" />
+            <StatCard title="סך כל ההוצאות" value={displayedAllTimeTotal === null ? "לא זמין" : formatCurrency(displayedAllTimeTotal)} helper="מצטבר מכל השנים" icon={<Wallet size={20} />} tone="blue" />
           </div>
           <div className="dashboard-grid">
             <article className="panel chart-panel">
@@ -691,6 +696,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [loading, setLoading] = useState(!demoMode && Boolean(userId));
   const [authError, setAuthError] = useState("");
+  const [allTimeTotal, setAllTimeTotal] = useState<number | null | undefined>(demoMode ? undefined : null);
 
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
@@ -727,14 +733,26 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     }
 
     const remoteHousehold: Household = { ...householdData, role: membership.role };
-    const [{ data: remoteCategories }, { data: remoteExpenses }, { data: remoteDrafts }] = await Promise.all([
+    const [{ data: remoteCategories }, { data: remoteExpenses }, { data: remoteDrafts }, { data: remoteSummary, error: summaryError }] = await Promise.all([
       supabase.from("categories").select("*").eq("household_id", remoteHousehold.id).eq("is_active", true).order("sort_order"),
       supabase.from("expenses").select("*, category:categories(*)").eq("household_id", remoteHousehold.id).is("deleted_at", null).order("expense_date", { ascending: false }).limit(500),
       supabase.from("monthly_entry_drafts").select("id, draft_data, version, month, year").eq("household_id", remoteHousehold.id).eq("status", "draft").order("updated_at", { ascending: false }).limit(1),
+      supabase.rpc("expense_summary", {
+        p_household_id: remoteHousehold.id,
+        p_from: null,
+        p_to: null,
+        p_category_id: null,
+        p_query: null,
+        p_amount: null,
+        p_deleted: false,
+        p_missing_info: false,
+      }),
     ]);
     setHousehold(remoteHousehold);
     setCategories((remoteCategories ?? []) as Category[]);
     setExpenses((remoteExpenses ?? []) as Expense[]);
+    const summaryRow = Array.isArray(remoteSummary) ? remoteSummary[0] as { total_amount?: number | string } | undefined : undefined;
+    setAllTimeTotal(summaryError ? null : Number(summaryRow?.total_amount ?? 0));
     const activeDraft = remoteDrafts?.[0] as { id: string; version?: number; month?: number; year?: number; draft_data?: { rows?: DraftRow[] } } | undefined;
     setDraftId(activeDraft?.id ?? null);
     setDraftVersion(activeDraft?.version ?? 1);
@@ -1138,7 +1156,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (loading) return <main className="login-page"><div className="loading-state"><div className="spinner" /><p>טוען את נתוני משק הבית...</p></div></main>;
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
-  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} onAnnualPhoto={() => { setPhotoDestination("annual"); setView("photo"); }} /> :
+  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} onAnnualPhoto={() => { setPhotoDestination("annual"); setView("photo"); }} allTimeTotal={allTimeTotal} /> :
     view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onEdit={(expense) => { setEditingExpense(expense); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, initialDate)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={initialMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView("dashboard")} /> :
