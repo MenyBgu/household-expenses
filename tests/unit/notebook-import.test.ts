@@ -7,6 +7,7 @@ import {
   restoreHebrewSpacing,
   suggestCategory,
 } from "@/lib/notebook-import";
+import { annualSummaryToRows, parseAnnualSummary } from "@/lib/annual-import";
 import { demoCategories } from "@/lib/demo-data";
 import type { Category } from "@/lib/types";
 
@@ -84,5 +85,41 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
     const rows = parseNotebookText("12 In N\n2000 חתונה מאי", 2026, 10, categories);
     expect(rows).toHaveLength(1);
     expect(rows[0].category_id).toBe("events");
+  });
+
+  it("מזהה סיכום שנתי לפי מספרי חודשים וסכומים", () => {
+    const summary = parseAnnualSummary(
+      [
+        { text: "שנת 2025" },
+        { text: "1. 2880" },
+        { text: "2. 2,135" },
+        { text: "3. 1000" },
+        { text: "4. 0" },
+      ],
+      2026,
+    );
+
+    expect(summary.year).toBe(2025);
+    expect(summary.months.slice(0, 4).map((month) => month.amount)).toEqual([2880, 2135, 1000, 0]);
+    expect(summary.months[4].amount).toBeNull();
+  });
+
+  it("משלים סכום שנמצא בשורה שאחרי מספר החודש", () => {
+    const summary = parseAnnualSummary([{ text: "שנת 2025" }, { text: "1." }, { text: "2880" }], 2026);
+
+    expect(summary.months[0].amount).toBe(2880);
+    expect(summary.months[1].amount).toBeNull();
+  });
+
+  it("יוצר 12 שורות ניתנות לעריכה ומסמן חודשים שלא זוהו", () => {
+    const rows = annualSummaryToRows(
+      parseAnnualSummary([{ text: "2025" }, { text: "1. 2880" }], 2026),
+      "other",
+    );
+
+    expect(rows).toHaveLength(12);
+    expect(rows[0].expense_date).toBe("2025-01-01");
+    expect(rows[0].amount).toBe("2880");
+    expect(rows[11].needsReview).toBe(true);
   });
 });

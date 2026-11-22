@@ -483,6 +483,7 @@ function Dashboard({
   onMonthChange,
   onAdd,
   onNavigate,
+  onAnnualPhoto,
 }: {
   expenses: Expense[];
   categories: Category[];
@@ -490,6 +491,7 @@ function Dashboard({
   onMonthChange: (month: string) => void;
   onAdd: () => void;
   onNavigate: (view: View) => void;
+  onAnnualPhoto: () => void;
 }) {
   const [range, setRange] = useState<"month" | "year">("month");
   const selectedYear = selectedMonth.slice(0, 4);
@@ -595,6 +597,7 @@ function Dashboard({
         <div className="quick-actions">
           <button onClick={onAdd}><Receipt size={19} /><span><strong>הוצאה בודדת</strong><small>רישום מהיר של הוצאה</small></span><ChevronLeft size={17} /></button>
           <button onClick={() => onNavigate("monthly")}><FileText size={19} /><span><strong>הזנת חודש שלם</strong><small>העברת הוצאות מהמחברת</small></span><ChevronLeft size={17} /></button>
+          <button onClick={onAnnualPhoto}><CalendarDays size={19} /><span><strong>סיכום שנתי מתמונה</strong><small>הזנת סכום לכל חודש בשנה</small></span><ChevronLeft size={17} /></button>
           <button onClick={() => onNavigate("expenses")}><Search size={19} /><span><strong>חיפוש הוצאות</strong><small>מציאת הוצאה לפי עסק או קטגוריה</small></span><ChevronLeft size={17} /></button>
         </div>
       </article>
@@ -681,7 +684,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [draftRows, setDraftRows] = useState<DraftRow[]>([]);
   const [draftMonth, setDraftMonth] = useState(initialMonth);
   const [dashboardMonth, setDashboardMonth] = useState(initialMonth);
-  const [photoDestination, setPhotoDestination] = useState<"monthly" | "expense">("monthly");
+  const [photoDestination, setPhotoDestination] = useState<"monthly" | "expense" | "annual">("monthly");
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(1);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -878,10 +881,36 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
       throw new Error("יש להתחבר לפני שמירת תמונה.");
     }
 
+    const annualYear = Number(month.split("-")[0]);
+    const annualMarker = `סיכום שנתי ${annualYear}`;
+    const positiveAnnualRows = rows.filter((row) => Number(row.amount) > 0);
+    if (photoDestination === "annual") {
+      if (!positiveAnnualRows.length) throw new Error("יש להזין לפחות חודש אחד עם סכום גדול מאפס.");
+      if (demoMode && expenses.some((expense) => expense.merchant_name === annualMarker && expense.is_historical)) {
+        throw new Error(`כבר קיים סיכום שנתי עבור ${annualYear}. מחקו אותו לפני העלאה מחדש.`);
+      }
+      if (!demoMode && supabase && household) {
+        const { data: existing, error: existingError } = await supabase
+          .from("expenses")
+          .select("id")
+          .eq("household_id", household.id)
+          .eq("merchant_name", annualMarker)
+          .eq("is_historical", true)
+          .is("deleted_at", null)
+          .limit(1);
+        if (existingError) throw new Error(existingError.message || "בדיקת סיכום שנתי קיים נכשלה.");
+        if (existing?.length) throw new Error(`כבר קיים סיכום שנתי עבור ${annualYear}. מחקו אותו לפני העלאה מחדש.`);
+      }
+    }
+
+    let annualImportId = "";
+    let annualStoragePath = "";
     if (!demoMode && supabase && userId && household) {
       const importId = crypto.randomUUID();
       const extension = file.type.split("/")[1]?.replace("jpeg", "jpg") || "bin";
       const storagePath = `${household.id}/${userId}/${importId}.${extension}`;
+      annualImportId = importId;
+      annualStoragePath = storagePath;
       const { error: uploadError } = await supabase.storage
         .from("expense-images")
         .upload(storagePath, file, { contentType: file.type, upsert: false });
@@ -905,6 +934,59 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         await supabase.storage.from("expense-images").remove([storagePath]);
         throw new Error("שמירת פרטי התמונה נכשלה.");
       }
+    }
+
+    if (photoDestination === "annual") {
+      const year = annualYear;
+
+      if (demoMode) {
+        const created = positiveAnnualRows.map((row) => ({
+          id: crypto.randomUUID(),
+          household_id: household?.id ?? demoHousehold.id,
+          created_by: "demo-user",
+          merchant_name: annualMarker,
+          description: row.description,
+          amount: Number(row.amount),
+          currency: household?.default_currency ?? "ILS",
+          expense_date: row.expense_date,
+          category_id: row.category_id,
+          payment_method: null,
+          notes: row.notes,
+          source: "monthly_entry",
+          is_historical: true,
+          is_recurring: false,
+          created_at: new Date().toISOString(),
+          category: categories.find((category) => category.id === row.category_id),
+        } as Expense));
+        setExpenses((items) => [...created, ...items]);
+      } else if (supabase && household && userId) {
+        const { error } = await supabase.from("expenses").insert(positiveAnnualRows.map((row) => ({
+          household_id: household.id,
+          created_by: userId,
+          merchant_name: annualMarker,
+          description: row.description,
+          amount: Number(row.amount),
+          currency: household.default_currency,
+          expense_date: row.expense_date,
+          category_id: row.category_id,
+          payment_method: null,
+          notes: row.notes,
+          source: "monthly_entry",
+          is_historical: true,
+          is_recurring: false,
+        })));
+        if (error) {
+          if (annualStoragePath) {
+            await supabase.storage.from("expense-images").remove([annualStoragePath]);
+            await supabase.from("notebook_imports").delete().eq("id", annualImportId);
+          }
+          throw new Error(error.message || "שמירת הסיכום השנתי נכשלה.");
+        }
+        await loadRemoteData();
+      }
+      setDashboardMonth(`${year}-01`);
+      setView("dashboard");
+      return;
     }
 
     if (photoDestination === "expense") {
@@ -1056,7 +1138,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (loading) return <main className="login-page"><div className="loading-state"><div className="spinner" /><p>טוען את נתוני משק הבית...</p></div></main>;
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
-  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} /> :
+  const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onNavigate={setView} onAnnualPhoto={() => { setPhotoDestination("annual"); setView("photo"); }} /> :
     view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} onAdd={() => { setEditingExpense(null); setShowExpenseForm(true); }} onEdit={(expense) => { setEditingExpense(expense); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, initialDate)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={initialMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onCancel={() => setView("dashboard")} /> :

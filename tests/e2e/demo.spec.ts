@@ -47,6 +47,14 @@ test.describe("מצב הדגמה", () => {
     await expect(page.getByRole("heading", { name: "צילום קבלה או הוצאה" })).toBeVisible();
   });
 
+  test("מאפשר לפתוח סיכום שנתי מתמונה", async ({ page }) => {
+    await page.goto("/");
+
+    await page.getByRole("button", { name: "סיכום שנתי מתמונה" }).click();
+    await expect(page.getByRole("heading", { name: "צילום סיכום שנתי" })).toBeVisible();
+    await expect(page.getByLabel("השנה שאליה שייך הסיכום")).toBeVisible();
+  });
+
   test("מאפשר לבחור כמה הוצאות למחיקה מרוכזת", async ({ page }) => {
     await page.goto("/");
 
