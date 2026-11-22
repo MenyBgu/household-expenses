@@ -383,6 +383,10 @@ begin
     (new.id, 'הוצאות חד-פעמיות', 'receipt', '#0891b2', true, 310),
     (new.id, 'אחר', 'ellipsis', '#db2777', true, 320)
   on conflict (household_id, name) do nothing;
+  update public.categories
+  set is_active = false
+  where household_id = new.id
+    and name in ('שכירות או משכנתה', 'חשמל', 'מים', 'ארנונה', 'גז');
   return new;
 end;
 $$;

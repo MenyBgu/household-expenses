@@ -9,9 +9,7 @@ export type SuggestedNotebookRow = DraftRow & {
 
 const CATEGORY_RULES: Array<{ category: string; words: string[] }> = [
   { category: "דלק", words: ["דלק", "תחנת דלק", "סונול", "פז", "דור אלון"] },
-  { category: "שכירות או משכנתה", words: ["משכנתא", "משכנתה", "שכירות", "שכר דירה"] },
-  { category: "ארנונה", words: ["ארנונה"] },
-  { category: "דיור", words: ["ועד בית", "וועד בית", "ועד הבית", "דירה"] },
+  { category: "דיור", words: ["משכנתא", "משכנתה", "שכירות", "שכר דירה", "ארנונה", "חשמל", "חברת החשמל", "מים", "מי אביבים", "תאגיד מים", "גז", "ועד בית", "וועד בית", "ועד הבית", "דירה"] },
   { category: "ביטוחים", words: ["ביטוח"] },
   { category: "רכב", words: ["מוסך", "טסט", "צמיגים", "חניה", "חנייה", "כביש 6"] },
   { category: "ביגוד ואופנה", words: ["שמלה", "חולצה", "מכנסיים", "נעליים", "בגדים", "ביגוד", "חליפה"] },
@@ -93,9 +91,10 @@ export function suggestCategory(
       }
     }
   }
-  const fallback = categories.find((category) => category.name === "אחר") ?? categories[0];
+  const activeCategories = categories.filter((category) => category.is_active);
+  const fallback = activeCategories.find((category) => category.name === "אחר") ?? activeCategories[0];
   const category = rule
-    ? categories.find((item) => item.name === rule.category)
+    ? activeCategories.find((item) => item.name === rule.category)
     : undefined;
 
   if (!category) {

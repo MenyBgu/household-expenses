@@ -501,7 +501,7 @@ function Dashboard({
   const total = sumMoney(monthExpenses.map((expense) => expense.amount));
   const previousTotal = sumMoney(previousMonth.map((expense) => expense.amount));
   const change = percentChange(total, previousTotal);
-  const byCategory = categories.map((category) => ({
+  const byCategory = categories.filter((category) => category.is_active).map((category) => ({
     name: category.name,
     amount: sumMoney(monthExpenses.filter((expense) => expense.category_id === category.id).map((expense) => expense.amount)),
   })).filter((category) => category.amount > 0).sort((a, b) => b.amount - a.amount);
@@ -525,7 +525,7 @@ function Dashboard({
   const annualTotal = sumMoney(yearExpenses.map((expense) => expense.amount));
   const annualAverage = annualTotals.filter((item) => item.count > 0);
   const highestMonth = [...annualTotals].sort((a, b) => b.amount - a.amount)[0];
-  const annualByCategory = categories.map((category) => ({
+  const annualByCategory = categories.filter((category) => category.is_active).map((category) => ({
     name: category.name,
     amount: sumMoney(yearExpenses.filter((expense) => expense.category_id === category.id).map((expense) => expense.amount)),
   })).filter((category) => category.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);

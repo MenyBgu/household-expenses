@@ -33,6 +33,21 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     expect(result.rows[0].count).toBe("32");
   });
 
+  it("מסמן קטגוריות דיור מפורטות כלא פעילות", async () => {
+    db = await createTestDb();
+    const userId = await createUser(db, "housing");
+    const householdId = await createHousehold(db, userId, "משפחת דיור");
+
+    await asAdmin(db);
+    const result = await db.query<{ name: string; is_active: boolean }>(
+      "select name, is_active from public.categories where household_id = $1 and name in ('שכירות או משכנתה', 'חשמל', 'מים', 'ארנונה', 'גז') order by name",
+      [householdId],
+    );
+
+    expect(result.rows).toHaveLength(5);
+    expect(result.rows.every((category) => !category.is_active)).toBe(true);
+  });
+
   it("מונע מחבר לקרוא נתונים ממשק בית אחר", async () => {
     db = await createTestDb();
     const owner = await createUser(db, "owner");

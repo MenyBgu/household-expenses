@@ -30,7 +30,7 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
 
     expect(rows).toHaveLength(4);
     expect(rows.map((row) => row.amount)).toEqual(["200", "1000", "350", "2000"]);
-    expect(rows.map((row) => row.category_id)).toEqual(["fuel", "mortgage", "home", "events"]);
+    expect(rows.map((row) => row.category_id)).toEqual(["fuel", "home", "home", "events"]);
     expect(rows[0].expense_date).toBe("2026-12-01");
   });
 
@@ -60,7 +60,8 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
     const byName = (text: string) =>
       demoCategories.find((category) => category.id === suggestCategory(text, demoCategories).categoryId)?.name;
     expect(byName("סופר פארם")).toBe("תרופות");
-    expect(byName("ארנונה")).toBe("ארנונה");
+    expect(byName("ארנונה")).toBe("דיור");
+    expect(byName("גז")).toBe("דיור");
     expect(byName("שמלה")).toBe("ביגוד ואופנה");
     expect(byName("ספר קטן")).toBe("אחר");
     expect(restoreHebrewSpacing("ממשכנתא")).toBe("משכנתא");
