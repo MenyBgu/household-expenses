@@ -771,13 +771,22 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as {
+          view?: View;
+          draftMonth?: string;
           dashboardMonth?: string;
           dashboardRange?: DashboardRange;
           yearWindowStart?: number;
         };
+        if (parsed.view && ["dashboard", "expenses", "monthly", "drafts"].includes(parsed.view)) {
+          // Restore the screen context, but never restore an in-progress photo or modal.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setView(parsed.view);
+        }
+        if (parsed.draftMonth && /^\d{4}-\d{2}$/.test(parsed.draftMonth)) {
+          setDraftMonth(parsed.draftMonth);
+        }
         if (parsed.dashboardMonth && /^\d{4}-\d{2}$/.test(parsed.dashboardMonth)) {
           // Local storage is the source of the user's navigation context.
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setDashboardMonth(parsed.dashboardMonth);
         }
         if (parsed.dashboardRange === "month" || parsed.dashboardRange === "year") {
@@ -797,11 +806,13 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   useEffect(() => {
     if (!uiStateHydrated) return;
     window.localStorage.setItem(uiStateKey, JSON.stringify({
+      view,
+      draftMonth,
       dashboardMonth,
       dashboardRange,
       yearWindowStart,
     }));
-  }, [dashboardMonth, dashboardRange, uiStateKey, uiStateHydrated, yearWindowStart]);
+  }, [dashboardMonth, dashboardRange, draftMonth, uiStateKey, uiStateHydrated, view, yearWindowStart]);
 
   const loadRemoteData = useCallback(async () => {
     if (!supabase || !userId) return;

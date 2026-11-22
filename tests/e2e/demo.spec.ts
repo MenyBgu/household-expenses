@@ -49,6 +49,24 @@ test.describe("מצב הדגמה", () => {
     await expect(page.getByText("השוואת הוצאות בין שנים")).toBeVisible();
   });
 
+  test("שומר את מסך הזנת החודש והחודש גם אחרי שמירת טיוטה וטעינה מחדש", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "הזנת חודש שלם" }).first().click();
+
+    const monthInput = page.getByLabel("החודש");
+    await monthInput.fill("2025-05");
+    await page.getByRole("button", { name: "הוספת שורה" }).first().click();
+    await page.locator(".monthly-table input[placeholder='עסק']").fill("בדיקת הקשר");
+    await page.locator(".monthly-table input[placeholder='0.00']").fill("10");
+    await page.locator(".monthly-table select").first().selectOption({ index: 1 });
+    await page.getByRole("button", { name: "שמירת טיוטה" }).click();
+    await expect(page.getByText("הטיוטה נשמרה")).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "הזנת חודש שלם" })).toBeVisible();
+    await expect(page.getByLabel("החודש")).toHaveValue("2025-05");
+  });
+
   test("מאפשר להתחיל הוספת הוצאה גם מתמונה", async ({ page }) => {
     await page.goto("/");
 
