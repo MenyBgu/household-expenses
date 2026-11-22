@@ -367,7 +367,7 @@ begin
     (new.id, 'תחבורה ורכב', 'bus', '#f59e0b', true, 150),
     (new.id, 'דלק', 'fuel', '#dc2626', true, 160),
     (new.id, 'רכב', 'car', '#7c3aed', true, 170),
-    (new.id, 'בריאות', 'heart-pulse', '#0891b2', true, 180),
+    (new.id, 'בריאות ותרופות', 'heart-pulse', '#0891b2', true, 180),
     (new.id, 'תרופות', 'pill', '#db2777', true, 190),
     (new.id, 'חינוך', 'graduation-cap', '#65a30d', true, 200),
     (new.id, 'ילדים', 'baby', '#ea580c', true, 210),
@@ -397,7 +397,11 @@ begin
       'הלוואות',
       'דלק',
       'רכב',
-      'אחזקת הבית'
+      'אחזקת הבית',
+      'חופשות ונסיעות',
+      'תרופות',
+      'ביגוד ואופנה',
+      'בעלי מקצוע'
     );
   return new;
 end;

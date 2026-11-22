@@ -19,6 +19,8 @@ const categories: Category[] = [
   { id: "other", household_id: "house", name: "אחר", is_active: true, sort_order: 5 },
   { id: "bank", household_id: "house", name: "בנק ועמלות", is_active: true, sort_order: 6 },
   { id: "internet", household_id: "house", name: "תקשורת ואינטרנט", is_active: true, sort_order: 7 },
+  { id: "health", household_id: "house", name: "בריאות ותרופות", is_active: true, sort_order: 8 },
+  { id: "leisure", household_id: "house", name: "בילויים ופנאי", is_active: true, sort_order: 9 },
 ];
 
 describe("קריאת רשימת הוצאות מתמונה", () => {
@@ -65,10 +67,12 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
   it("מעדיף את ההתאמה הארוכה והמדויקת ביותר", () => {
     const byName = (text: string) =>
       demoCategories.find((category) => category.id === suggestCategory(text, demoCategories).categoryId)?.name;
-    expect(byName("סופר פארם")).toBe("תרופות");
+    expect(byName("סופר פארם")).toBe("בריאות ותרופות");
     expect(byName("ארנונה")).toBe("דיור");
     expect(byName("גז")).toBe("דיור");
-    expect(byName("שמלה")).toBe("ביגוד ואופנה");
+    expect(byName("שמלה")).toBe("צרכנות וקניות");
+    expect(byName("מלון")).toBe("בילויים ופנאי");
+    expect(byName("אינסטלטור")).toBe("דיור");
     expect(byName("ספר קטן")).toBe("אחר");
     expect(restoreHebrewSpacing("ממשכנתא")).toBe("משכנתא");
   });

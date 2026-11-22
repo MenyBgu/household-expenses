@@ -40,17 +40,22 @@ describe("סכמת מסד הנתונים והרשאות", () => {
 
     await asAdmin(db);
     const result = await db.query<{ name: string; is_active: boolean }>(
-      "select name, is_active from public.categories where household_id = $1 and name in ('מזון וסופר', 'שכירות או משכנתה', 'חשמל', 'מים', 'ארנונה', 'גז', 'אחזקת הבית', 'תחבורה', 'דלק', 'רכב', 'הלוואות', 'סלולר') order by name",
+      "select name, is_active from public.categories where household_id = $1 and name in ('מזון וסופר', 'שכירות או משכנתה', 'חשמל', 'מים', 'ארנונה', 'גז', 'אחזקת הבית', 'תחבורה', 'דלק', 'רכב', 'הלוואות', 'סלולר', 'תרופות', 'חופשות ונסיעות', 'ביגוד ואופנה', 'בעלי מקצוע') order by name",
       [householdId],
     );
 
-    expect(result.rows).toHaveLength(11);
+    expect(result.rows).toHaveLength(15);
     expect(result.rows.every((category) => !category.is_active)).toBe(true);
     const renamed = await db.query<{ is_active: boolean }>(
       "select is_active from public.categories where household_id = $1 and name = 'תחבורה ורכב'",
       [householdId],
     );
     expect(renamed.rows[0].is_active).toBe(true);
+    const health = await db.query<{ is_active: boolean }>(
+      "select is_active from public.categories where household_id = $1 and name = 'בריאות ותרופות'",
+      [householdId],
+    );
+    expect(health.rows[0].is_active).toBe(true);
   });
 
   it("מסכם הוצאות לפי שנה במסד הנתונים", async () => {

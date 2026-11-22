@@ -14,6 +14,7 @@ export async function createTestDb(): Promise<TestDb> {
   await db.exec(readFileSync(join(ROOT, "supabase/migrations/0003_merge_housing_categories.sql"), "utf8"));
   await db.exec(readFileSync(join(ROOT, "supabase/migrations/0004_merge_expense_categories.sql"), "utf8"));
   await db.exec(readFileSync(join(ROOT, "supabase/migrations/0005_add_yearly_totals.sql"), "utf8"));
+  await db.exec(readFileSync(join(ROOT, "supabase/migrations/0006_merge_leisure_health_categories.sql"), "utf8"));
   return db;
 }
 
