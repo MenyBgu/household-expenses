@@ -642,6 +642,29 @@ textarea {
   margin-bottom: 15px;
 }
 
+.month-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -5px 0 14px;
+}
+
+.month-shortcuts button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.month-shortcuts button:hover,
+.month-shortcuts button.active {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  color: var(--primary);
+}
+
 .filters-bar select,
 .filters-bar input {
   width: auto;
@@ -749,6 +772,7 @@ textarea {
 }
 
 .expense-main span,
+.expense-main small,
 .expense-category,
 .expense-date {
   color: var(--muted);
@@ -771,6 +795,29 @@ textarea {
 .expense-actions {
   display: flex;
   gap: 2px;
+}
+
+.undo-toast {
+  position: fixed;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(20px, calc(20px + env(safe-area-inset-bottom)));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 8px 30px rgb(16 24 40 / 16%);
+  font-size: 13px;
+}
+
+.undo-toast button {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 700;
 }
 
 .month-picker {
@@ -1390,6 +1437,10 @@ textarea {
     flex-direction: column;
   }
 
+  .month-shortcuts {
+    margin-top: -10px;
+  }
+
   .search-field,
   .filters-bar select,
   .filters-bar input {
@@ -1406,5 +1457,12 @@ textarea {
 
   .chart-box {
     height: 230px;
+  }
+
+  .undo-toast {
+    right: 12px;
+    left: 12px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    justify-content: space-between;
   }
 }

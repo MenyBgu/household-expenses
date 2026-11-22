@@ -99,12 +99,40 @@ test.describe("מצב הדגמה", () => {
 
     const monthFilter = page.locator(".filters-bar input[type='month']");
     await monthFilter.fill("2026-11");
-    await page.locator(".expense-actions .icon-button").first().click();
+    await page.getByRole("button", { name: "עריכת הוצאה" }).first().click();
     await page.getByLabel("שם העסק").fill("עסק מעודכן");
     await page.getByRole("button", { name: "שמירת שינויים" }).click();
 
     await expect(page.getByRole("heading", { name: "הוצאות" })).toBeVisible();
     await expect(monthFilter).toHaveValue("2026-11");
     await expect(page.getByText("עסק מעודכן")).toBeVisible();
+  });
+
+  test("מאפשר ליצור הוצאה קבועה למספר חודשים", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "הוספת הוצאה" }).first().click();
+    await page.getByLabel("שם העסק").fill("כבלים");
+    await page.getByLabel("סכום").fill("120");
+    await page.getByLabel("תאריך").fill("2026-11-01");
+    await page.getByLabel("קטגוריה").selectOption({ label: "תקשורת ואינטרנט" });
+    await page.getByLabel("סוג ההוצאה").selectOption("fixed");
+    await page.getByLabel("לכמה חודשים").fill("3");
+    await page.getByRole("button", { name: "שמירת הוצאה" }).click();
+
+    await page.getByRole("button", { name: "הוצאות" }).first().click();
+    await expect(page.getByText("הוצאה קבועה · 3 חודשים").first()).toBeVisible();
+  });
+
+  test("מאפשר לשכפל הוצאה ולבטל מחיקה", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "הוצאות" }).first().click();
+    await page.getByRole("button", { name: "שכפול הוצאה" }).first().click();
+    await expect(page.getByLabel("שם העסק")).toHaveValue("רמי לוי");
+    await page.getByRole("button", { name: "ביטול" }).click();
+
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.getByRole("button", { name: "מחיקת הוצאה" }).first().click();
+    await page.getByRole("button", { name: "ביטול" }).click();
+    await expect(page.getByText("רמי לוי")).toBeVisible();
   });
 });

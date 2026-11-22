@@ -52,7 +52,7 @@ supabase/migrations/0001_initial_schema.sql
 ```
 
 אפשר להריץ אותו דרך SQL Editor של Supabase או באמצעות Supabase CLI.
-אם הסכימה כבר הופעלה בעבר, יש להריץ גם את `supabase/migrations/0002_add_events_category.sql`, את `supabase/migrations/0003_merge_housing_categories.sql`, את `supabase/migrations/0004_merge_expense_categories.sql`, את `supabase/migrations/0005_add_yearly_totals.sql` ואת `supabase/migrations/0006_merge_leisure_health_categories.sql`.
+אם הסכימה כבר הופעלה בעבר, יש להריץ גם את `supabase/migrations/0002_add_events_category.sql`, את `supabase/migrations/0003_merge_housing_categories.sql`, את `supabase/migrations/0004_merge_expense_categories.sql`, את `supabase/migrations/0005_add_yearly_totals.sql`, את `supabase/migrations/0006_merge_leisure_health_categories.sql` ואת `supabase/migrations/0007_add_expense_schedules.sql`.
 
 5. ב-Supabase פתחו את Authentication → Providers והפעילו Google.
 6. הגדירו ב-Google Cloud OAuth Client:
@@ -121,7 +121,7 @@ npm run build
 - במצב הדגמה התמונה אינה נשמרת בשרת, אלא נקראת מקומית בלבד.
 - ייבוא CSV/Excel עדיין אינו זמין.
 - אין עדיין הזמנת בני משפחה.
-- אין עדיין תקציבים, הוצאות קבועות או עסקאות בתשלומים.
+- אין עדיין תקציבים.
 - יש להגדיר OAuth ו-Supabase לפני שימוש אמיתי.
 - מסלולים חינמיים של Supabase, Vercel ו-Google כפופים למכסות ולתנאי שימוש.
 

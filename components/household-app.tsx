@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -28,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  Copy,
   FileText,
   Home,
   ImagePlus,
@@ -46,7 +48,7 @@ import { BrandLogo, HouseholdIllustration } from "@/components/brand";
 import { NotebookImport } from "@/components/notebook-import";
 import { suggestCategory } from "@/lib/notebook-import";
 import { formatCurrency, formatDate, monthTitle, nextIsoMonth, percentChange, previousIsoMonth } from "@/lib/format";
-import { sumMoney } from "@/lib/money";
+import { splitMoney, sumMoney } from "@/lib/money";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Category, DraftRow, Expense, Household } from "@/lib/types";
 import { draftRowSchema, expenseSchema, householdSchema } from "@/lib/validation";
@@ -85,7 +87,11 @@ type ExpenseFormValues = {
   category_id: string;
   payment_method: string;
   notes: string;
+  schedule_type: "none" | "fixed" | "installment";
+  schedule_months: string;
 };
+
+type ScheduleType = ExpenseFormValues["schedule_type"];
 
 const paymentMethodOptions = [
   { value: "credit_card", label: "אשראי" },
@@ -106,6 +112,20 @@ const legacyPaymentMethods: Record<string, string> = {
 
 function toDatabasePaymentMethod(value: string) {
   return legacyPaymentMethods[value] ?? value;
+}
+
+function addMonthsToIsoDate(date: string, offset: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const target = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(day, lastDay));
+  return target.toISOString().slice(0, 10);
+}
+
+function scheduleLabel(type: ScheduleType, months: number | null | undefined) {
+  if (type === "fixed") return `הוצאה קבועה · ${months} חודשים`;
+  if (type === "installment") return `תשלומים · ${months} חודשים`;
+  return "";
 }
 
 function makeNewRow(categoryId = demoCategories[0]?.id ?? "", date: string): DraftRow {
@@ -130,6 +150,8 @@ function emptyExpenseForm(categoryId = "", date: string): ExpenseFormValues {
     category_id: categoryId,
     payment_method: "",
     notes: "",
+    schedule_type: "none",
+    schedule_months: "",
   };
 }
 
@@ -291,6 +313,11 @@ function ExpenseForm({
       setError(result.error.issues[0]?.message ?? "יש לתקן את הפרטים");
       return;
     }
+    const scheduleMonths = Number(values.schedule_months);
+    if (values.schedule_type !== "none" && (!Number.isInteger(scheduleMonths) || scheduleMonths < 1 || scheduleMonths > 120)) {
+      setError("יש לבחור משך של 1 עד 120 חודשים.");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
@@ -342,6 +369,22 @@ function ExpenseForm({
           תיאור או הערה
           <textarea value={values.description} onChange={(event) => change("description", event.target.value)} placeholder="מה נקנה או עבור מה שולם?" rows={2} />
         </label>
+        <label className="span-two">
+          סוג ההוצאה
+          <select value={values.schedule_type} disabled={Boolean(editingId)} onChange={(event) => change("schedule_type", event.target.value as ScheduleType)}>
+            <option value="none">הוצאה רגילה</option>
+            <option value="fixed">הוצאה קבועה</option>
+            <option value="installment">תשלום בתשלומים</option>
+          </select>
+          {editingId && <span className="small muted">עריכת חודש בודד לא משנה את שאר חודשי הסדרה.</span>}
+        </label>
+        {values.schedule_type !== "none" && (
+          <label>
+            {values.schedule_type === "installment" ? "מספר תשלומים" : "לכמה חודשים"}
+            <input inputMode="numeric" type="number" min="1" max="120" value={values.schedule_months} disabled={Boolean(editingId)} onChange={(event) => change("schedule_months", event.target.value)} placeholder="לדוגמה: 12" />
+            {values.schedule_type === "installment" && <span className="small muted">הסכום יחולק שווה ככל האפשר בין החודשים.</span>}
+          </label>
+        )}
       </div>
       {error && <p className="field-error">{error}</p>}
       <div className="form-actions">
@@ -371,13 +414,14 @@ function MonthlyEntry({
   month: string;
   onMonthChange: (month: string) => void;
   onChange: (id: string, field: keyof DraftRow, value: string) => void;
-  onSaveDraft: () => Promise<void>;
+  onSaveDraft: (silent?: boolean) => Promise<void>;
   onCommit: () => Promise<number | undefined>;
   onAddRow: () => void;
   onDeleteRow: (id: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const saveDraftRef = useRef(onSaveDraft);
   const validRows = rows.filter((row) => draftRowSchema.safeParse(row).success);
   const total = sumMoney(validRows.map((row) => row.amount));
   const duplicateCount = validRows.filter((row) =>
@@ -388,12 +432,24 @@ function MonthlyEntry({
     ),
   ).length;
 
-  async function saveDraft() {
+  useEffect(() => {
+    saveDraftRef.current = onSaveDraft;
+  }, [onSaveDraft]);
+
+  useEffect(() => {
+    if (!rows.length) return;
+    const timeout = window.setTimeout(() => {
+      void saveDraftRef.current(true);
+    }, 700);
+    return () => window.clearTimeout(timeout);
+  }, [month, rows]);
+
+  async function saveDraft(silent = false) {
     setSaving(true);
     setMessage("");
     try {
-      await onSaveDraft();
-      setMessage("הטיוטה נשמרה. אפשר לחזור אליה מאוחר יותר.");
+      await onSaveDraft(silent);
+      if (!silent) setMessage("הטיוטה נשמרה. אפשר לחזור אליה מאוחר יותר.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "שמירת הטיוטה נכשלה");
     } finally {
@@ -477,7 +533,7 @@ function MonthlyEntry({
       </div>
       {message && <div className="notice success-notice"><Check size={18} />{message}</div>}
       <div className="form-actions">
-        <button className="secondary-button" onClick={saveDraft} disabled={saving}>שמירת טיוטה</button>
+        <button className="secondary-button" onClick={() => void saveDraft()} disabled={saving}>שמירת טיוטה</button>
         <button className="primary-button" onClick={commit} disabled={saving || validRows.length === 0}><Check size={17} /> {validRows.length && validRows.length < rows.length ? `שמירת ${validRows.length} השורות התקינות` : "אישור ושמירת ההוצאות"}</button>
       </div>
     </section>
@@ -670,19 +726,23 @@ function Dashboard({
 function ExpensesView({
   expenses,
   categories,
+  initialMonth,
   dateFilter,
   onDateFilterChange,
   onAdd,
   onEdit,
+  onDuplicate,
   onDelete,
   onDeleteMany,
 }: {
   expenses: Expense[];
   categories: Category[];
+  initialMonth: string;
   dateFilter: string;
   onDateFilterChange: (month: string) => void;
   onAdd: () => void;
   onEdit: (expense: Expense) => void;
+  onDuplicate: (expense: Expense) => void;
   onDelete: (id: string) => Promise<void>;
   onDeleteMany: (ids: string[]) => Promise<void>;
 }) {
@@ -728,12 +788,23 @@ function ExpensesView({
         <label><span className="sr-only">קטגוריה</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">כל הקטגוריות</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         {(query || categoryFilter || dateFilter) && <button className="text-button" onClick={() => { setQuery(""); setCategoryFilter(""); onDateFilterChange(""); }}>ניקוי מסננים</button>}
       </div>
+      <div className="month-shortcuts" aria-label="קיצורי חודשים">
+        {[
+          ["החודש", initialMonth],
+          ["החודש הקודם", previousIsoMonth(initialMonth)],
+          ["לפני חודשיים", previousIsoMonth(previousIsoMonth(initialMonth))],
+        ].map(([label, value]) => (
+          <button key={value} type="button" className={dateFilter === value ? "active" : ""} aria-pressed={dateFilter === value} onClick={() => onDateFilterChange(value)}>
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="selection-toolbar">
         <label className="checkbox-label"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="בחירת כל ההוצאות המוצגות" /><span>בחירת הכל</span></label>
         {selectedIds.size > 0 && <><span className="small muted">{selectedIds.size} נבחרו</span><button className="danger-button" type="button" onClick={deleteSelected}>מחיקת ההוצאות שנבחרו</button></>}
       </div>
       <div className="expense-list">
-        {filtered.map((expense) => <article className={`expense-item ${selectedIds.has(expense.id) ? "selected" : ""}`} key={expense.id}><label className="expense-checkbox"><input type="checkbox" checked={selectedIds.has(expense.id)} onChange={() => toggleSelected(expense.id)} aria-label={`בחירת ${expense.merchant_name || expense.description || "הוצאה"}`} /></label><div className="expense-category-dot" /><div className="expense-main"><strong>{expense.merchant_name || expense.description}</strong><span>{expense.description && expense.merchant_name ? expense.description : expense.category?.name}</span></div><div className="expense-category">{expense.category?.name ?? categories.find((category) => category.id === expense.category_id)?.name}</div><div className="expense-date">{formatDate(expense.expense_date)}</div><strong className="expense-amount">{formatCurrency(expense.amount, expense.currency)}</strong><div className="expense-actions"><button className="icon-button" onClick={() => onEdit(expense)} aria-label="עריכת הוצאה">✎</button><button className="icon-button danger-icon" onClick={() => onDelete(expense.id)} aria-label="מחיקת הוצאה"><Trash2 size={16} /></button></div></article>)}
+        {filtered.map((expense) => <article className={`expense-item ${selectedIds.has(expense.id) ? "selected" : ""}`} key={expense.id}><label className="expense-checkbox"><input type="checkbox" checked={selectedIds.has(expense.id)} onChange={() => toggleSelected(expense.id)} aria-label={`בחירת ${expense.merchant_name || expense.description || "הוצאה"}`} /></label><div className="expense-category-dot" /><div className="expense-main"><strong>{expense.merchant_name || expense.description}</strong><span>{expense.description && expense.merchant_name ? expense.description : expense.category?.name}</span>{scheduleLabel(expense.schedule_type ?? "none", expense.schedule_months) && <small>{scheduleLabel(expense.schedule_type ?? "none", expense.schedule_months)}</small>}</div><div className="expense-category">{expense.category?.name ?? categories.find((category) => category.id === expense.category_id)?.name}</div><div className="expense-date">{formatDate(expense.expense_date)}</div><strong className="expense-amount">{formatCurrency(expense.amount, expense.currency)}</strong><div className="expense-actions"><button className="icon-button" onClick={() => onDuplicate(expense)} aria-label="שכפול הוצאה"><Copy size={16} /></button><button className="icon-button" onClick={() => onEdit(expense)} aria-label="עריכת הוצאה">✎</button><button className="icon-button danger-icon" onClick={() => onDelete(expense.id)} aria-label="מחיקת הוצאה"><Trash2 size={16} /></button></div></article>)}
         {!filtered.length && <div className="empty-state"><Search size={30} /><h3>לא נמצאו הוצאות</h3><p>נסו לשנות את החיפוש או להוסיף הוצאה חדשה.</p></div>}
       </div>
     </section>
@@ -758,8 +829,10 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [draftVersion, setDraftVersion] = useState(1);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [newExpensePrefill, setNewExpensePrefill] = useState<ExpenseFormValues | null>(null);
   const [expenseFormReturnView, setExpenseFormReturnView] = useState<View>("expenses");
   const [newExpenseDate, setNewExpenseDate] = useState(initialDate);
+  const [undoDeleteState, setUndoDeleteState] = useState<{ ids: string[]; expenses: Expense[] } | null>(null);
   const [loading, setLoading] = useState(!demoMode && Boolean(userId));
   const [authError, setAuthError] = useState("");
   const [allTimeTotal, setAllTimeTotal] = useState<number | null | undefined>(demoMode ? undefined : null);
@@ -822,6 +895,12 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
       expensesDateFilter,
     }));
   }, [dashboardMonth, dashboardRange, draftMonth, expensesDateFilter, uiStateKey, uiStateHydrated, view, yearWindowStart]);
+
+  useEffect(() => {
+    if (!undoDeleteState) return;
+    const timeout = window.setTimeout(() => setUndoDeleteState(null), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [undoDeleteState]);
 
   const loadRemoteData = useCallback(async () => {
     if (!supabase || !userId) return;
@@ -945,9 +1024,28 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
 
   function openExpenseForm(returnView: View = view) {
     setEditingExpense(null);
+    setNewExpensePrefill(null);
     setExpenseFormReturnView(returnView);
     const contextMonth = returnView === "dashboard" ? dashboardMonth : returnView === "monthly" ? draftMonth : "";
     setNewExpenseDate(contextMonth ? `${contextMonth}-01` : initialDate);
+    setShowExpenseForm(true);
+  }
+
+  function duplicateExpense(expense: Expense) {
+    setEditingExpense(null);
+    setExpenseFormReturnView("expenses");
+    setNewExpenseDate(expense.expense_date);
+    setNewExpensePrefill({
+      merchant_name: expense.merchant_name ?? "",
+      description: expense.description ?? "",
+      amount: String(expense.amount),
+      expense_date: expense.expense_date,
+      category_id: expense.category_id,
+      payment_method: expense.payment_method ?? "",
+      notes: expense.notes ?? "",
+      schedule_type: "none",
+      schedule_months: "",
+    });
     setShowExpenseForm(true);
   }
 
@@ -969,11 +1067,11 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   }
 
   async function saveExpense(values: ExpenseFormValues, id?: string) {
-    const payload = {
+    const scheduleType = values.schedule_type;
+    const scheduleMonths = scheduleType === "none" ? null : Number(values.schedule_months);
+    const basePayload = {
       merchant_name: values.merchant_name.trim() || null,
       description: values.description.trim() || null,
-      amount: Number(values.amount),
-      expense_date: values.expense_date,
       category_id: values.category_id,
       payment_method: values.payment_method ? toDatabasePaymentMethod(values.payment_method) : null,
       notes: values.notes || null,
@@ -982,31 +1080,70 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
       created_by: userId ?? "demo-user",
       source: "manual",
     };
-    if (demoMode) {
-      const category = categories.find((item) => item.id === values.category_id);
-      if (id) {
+    const category = categories.find((item) => item.id === values.category_id);
+
+    if (id) {
+      const payload = {
+        ...basePayload,
+        amount: Number(values.amount),
+        expense_date: values.expense_date,
+        is_recurring: scheduleType === "fixed",
+        schedule_group_id: null,
+        schedule_type: scheduleType,
+        schedule_months: scheduleMonths,
+        schedule_index: scheduleType === "none" ? null : 1,
+      };
+      if (demoMode) {
         setExpenses((items) => items.map((expense) => expense.id === id ? { ...expense, ...payload, category } as Expense : expense));
-      } else {
-        setExpenses((items) => [{ ...payload, id: crypto.randomUUID(), is_historical: false, is_recurring: false, created_at: new Date().toISOString(), category } as Expense, ...items]);
-      }
-    } else if (supabase) {
-      if (id) {
+      } else if (supabase) {
         const { error } = await supabase.from("expenses").update(payload).eq("id", id);
         if (error) throw new Error(`עדכון ההוצאה נכשל: ${error.message}`);
-      } else {
-        const { error } = await supabase.from("expenses").insert(payload);
-        if (error) throw new Error(`שמירת ההוצאה נכשלה: ${error.message}`);
+        await loadRemoteData();
       }
-      await loadRemoteData();
+    } else {
+      const months = scheduleMonths ?? 1;
+      const scheduleGroupId = scheduleType === "none" ? null : crypto.randomUUID();
+      const amounts = scheduleType === "installment"
+        ? splitMoney(values.amount, months)
+        : Array.from({ length: months }, () => Number(values.amount));
+      const payloads = amounts.map((amount, index) => ({
+        ...basePayload,
+        amount,
+        expense_date: addMonthsToIsoDate(values.expense_date, index),
+        is_recurring: scheduleType === "fixed",
+        schedule_group_id: scheduleGroupId,
+        schedule_type: scheduleType,
+        schedule_months: scheduleType === "none" ? null : months,
+        schedule_index: scheduleType === "none" ? null : index + 1,
+        client_key: crypto.randomUUID(),
+      }));
+
+      if (demoMode) {
+        const createdAt = new Date().toISOString();
+        const created = payloads.map((payload) => ({
+          ...payload,
+          id: crypto.randomUUID(),
+          is_historical: false,
+          created_at: createdAt,
+          category,
+        } as Expense));
+        setExpenses((items) => [...created, ...items]);
+      } else if (supabase) {
+        const { error } = await supabase.from("expenses").insert(payloads);
+        if (error) throw new Error(`שמירת ההוצאה נכשלה: ${error.message}`);
+        await loadRemoteData();
+      }
     }
     setShowExpenseForm(false);
     setEditingExpense(null);
+    setNewExpensePrefill(null);
     setView(expenseFormReturnView);
   }
 
   async function deleteExpense(id: string) {
     if (!window.confirm("למחוק את ההוצאה? היא תוסר מהרשימה ומהסטטיסטיקות.")) return;
     setAuthError("");
+    const removedExpense = expenses.find((expense) => expense.id === id);
     if (demoMode) {
       setExpenses((items) => items.filter((expense) => expense.id !== id));
     } else if (supabase) {
@@ -1017,10 +1154,12 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
       }
       await loadRemoteData();
     }
+    if (removedExpense) setUndoDeleteState({ ids: [id], expenses: [removedExpense] });
   }
 
   async function deleteExpenses(ids: string[]) {
     setAuthError("");
+    const removedExpenses = expenses.filter((expense) => ids.includes(expense.id));
     if (demoMode) {
       setExpenses((items) => items.filter((expense) => !ids.includes(expense.id)));
     } else if (supabase) {
@@ -1031,6 +1170,24 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
       }
       await loadRemoteData();
     }
+    if (removedExpenses.length) setUndoDeleteState({ ids, expenses: removedExpenses });
+  }
+
+  async function restoreDeletedExpenses() {
+    if (!undoDeleteState) return;
+    const state = undoDeleteState;
+    setAuthError("");
+    if (demoMode) {
+      setExpenses((items) => [...state.expenses, ...items]);
+    } else if (supabase) {
+      const { error } = await supabase.from("expenses").update({ deleted_at: null }).in("id", state.ids);
+      if (error) {
+        setAuthError("שחזור ההוצאות נכשל. נסו שוב.");
+        return;
+      }
+      await loadRemoteData();
+    }
+    setUndoDeleteState(null);
   }
 
   function updateRow(id: string, field: keyof DraftRow, value: string) {
@@ -1300,10 +1457,23 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
   const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} range={dashboardRange} onRangeChange={setDashboardRange} yearWindowStart={yearWindowStart} onYearWindowStart={setYearWindowStart} onAdd={() => openExpenseForm("dashboard")} onNavigate={setView} onAnnualPhoto={() => openPhoto("annual", "dashboard")} allTimeTotal={allTimeTotal} yearlyTotals={yearlyTotals} /> :
-    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} dateFilter={expensesDateFilter} onDateFilterChange={setExpensesDateFilter} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
+    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} initialMonth={initialMonth} dateFilter={expensesDateFilter} onDateFilterChange={setExpensesDateFilter} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setNewExpensePrefill(null); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDuplicate={duplicateExpense} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, `${draftMonth}-01`)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={photoReturnView === "monthly" ? draftMonth : dashboardMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView(photoReturnView)} /> :
     <section className="content-section"><div className="section-heading"><div><p className="eyebrow">שמירה להמשך</p><h1>טיוטות חודשיות</h1><p className="muted">הטיוטות נשמרות כדי שאפשר יהיה להמשיך מאוחר יותר.</p></div></div><div className="empty-state"><FileText size={30} /><h3>טיוטה חדשה מתחילה במסך הזנת חודש</h3><button className="primary-button" onClick={() => setView("monthly")}>פתיחת הזנה חודשית</button></div></section>;
+  const expenseFormInitial = editingExpense
+    ? {
+        merchant_name: editingExpense.merchant_name ?? "",
+        description: editingExpense.description ?? "",
+        amount: String(editingExpense.amount),
+        expense_date: editingExpense.expense_date,
+        category_id: editingExpense.category_id,
+        payment_method: editingExpense.payment_method ?? "",
+        notes: editingExpense.notes ?? "",
+        schedule_type: editingExpense.schedule_type ?? (editingExpense.is_recurring ? "fixed" : "none"),
+        schedule_months: editingExpense.schedule_months ? String(editingExpense.schedule_months) : "",
+      }
+    : newExpensePrefill ?? emptyExpenseForm("", newExpenseDate);
 
   return (
     <div className="app-layout">
@@ -1341,8 +1511,14 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         <div className="top-banner">{demoMode ? <><CircleHelp size={16} /><span>מצב הדגמה פעיל. הנתונים נשמרים בדפדפן הזה בלבד.</span></> : <><Check size={16} /><span>הנתונים מחוברים למסד הנתונים המאובטח של משק הבית.</span></>}</div>
         {authError && <div className="notice danger-notice"><X size={18} />{authError}</div>}
         {currentView}
+        {undoDeleteState && (
+          <div className="undo-toast" role="status">
+            <span>{undoDeleteState.ids.length === 1 ? "ההוצאה נמחקה." : `${undoDeleteState.ids.length} הוצאות נמחקו.`}</span>
+            <button type="button" onClick={restoreDeletedExpenses}>ביטול</button>
+          </div>
+        )}
       </main>
-      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={editingExpense ? { merchant_name: editingExpense.merchant_name ?? "", description: editingExpense.description ?? "", amount: String(editingExpense.amount), expense_date: editingExpense.expense_date, category_id: editingExpense.category_id, payment_method: editingExpense.payment_method ?? "", notes: editingExpense.notes ?? "" } : emptyExpenseForm("", newExpenseDate)} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); openPhoto("expense", expenseFormReturnView); }} onSave={saveExpense} /></div></div>}
+      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={expenseFormInitial} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); openPhoto("expense", expenseFormReturnView); }} onSave={saveExpense} /></div></div>}
     </div>
   );
 }

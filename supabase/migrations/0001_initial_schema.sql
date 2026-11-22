@@ -98,6 +98,10 @@ create table public.expenses (
   source text not null default 'manual' check (source in ('manual', 'monthly_entry')),
   is_historical boolean not null default false,
   is_recurring boolean not null default false,
+  schedule_group_id uuid,
+  schedule_type text not null default 'none' check (schedule_type in ('none', 'fixed', 'installment')),
+  schedule_months integer check (schedule_months is null or schedule_months between 1 and 120),
+  schedule_index integer check (schedule_index is null or schedule_index between 1 and 120),
   deleted_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -110,6 +114,9 @@ create index expenses_household_category_idx on public.expenses (household_id, c
 create index expenses_created_by_idx on public.expenses (created_by);
 create index expenses_household_deleted_idx
   on public.expenses (household_id, deleted_at) where deleted_at is not null;
+create index expenses_schedule_group_idx
+  on public.expenses (household_id, schedule_group_id)
+  where schedule_group_id is not null and deleted_at is null;
 
 -- מעקב אידמפוטנטיות לשמירה חודשית: מפתח שנשמר פעם אחת לא ייכתב שוב
 create table public.monthly_commit_batches (

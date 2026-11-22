@@ -24,6 +24,10 @@ export type Expense = {
   source: string;
   is_historical: boolean;
   is_recurring: boolean;
+  schedule_group_id?: string | null;
+  schedule_type?: "none" | "fixed" | "installment" | null;
+  schedule_months?: number | null;
+  schedule_index?: number | null;
   deleted_at?: string | null;
   created_at: string;
   category?: Category;
