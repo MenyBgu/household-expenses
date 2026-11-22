@@ -105,6 +105,32 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
     expect(summary.months[4].amount).toBeNull();
   });
 
+  it("מזהה גם את פורמט התמונה: סכום לפני מספר החודש", () => {
+    const summary = parseAnnualSummary(
+      [
+        { text: "2020" },
+        { text: "2880 .1" },
+        { text: "2135 .2" },
+        { text: "510 .3" },
+        { text: "580 .4" },
+        { text: "1370 .5" },
+        { text: "3930 .6" },
+        { text: "2020 .7" },
+        { text: "3610 .8" },
+        { text: "104675 .9" },
+        { text: "6650 .10" },
+        { text: "6020 .11" },
+        { text: "3300 .12" },
+      ],
+      2026,
+    );
+
+    expect(summary.year).toBe(2020);
+    expect(summary.months.map((month) => month.amount)).toEqual([
+      2880, 2135, 510, 580, 1370, 3930, 2020, 3610, 104675, 6650, 6020, 3300,
+    ]);
+  });
+
   it("משלים סכום שנמצא בשורה שאחרי מספר החודש", () => {
     const summary = parseAnnualSummary([{ text: "שנת 2025" }, { text: "1." }, { text: "2880" }], 2026);
 

@@ -70,13 +70,20 @@ function extractYear(lines: AnnualOcrLine[], fallbackYear: number): number {
 function readRowsFromLine(line: string): Array<{ month: number; amount: number | null }> {
   const normalized = normalizeDigits(line).replace(/[|]/g, " ").trim();
   const monthPattern = "(1[0-2]|[1-9]|ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)";
-  const matches = [...normalized.matchAll(new RegExp(`(?:^|\\s)${monthPattern}\\s*(?:[.)\\-:]\\s*|\\s+)(\\d[\\d,.]*)(?=\\s|$)`, "gi"))];
-  return matches
-    .map((match) => {
-      const month = monthFromLabel(match[1]);
-      return month ? { month, amount: parseAnnualAmount(match[2]) } : null;
-    })
-    .filter((row): row is { month: number; amount: number | null } => row !== null);
+  const rows: Array<{ month: number; amount: number | null }> = [];
+  const monthFirstPattern = new RegExp(`(?:^|\\s)(${monthPattern})\\s*(?:[.)\\-:]\\s*|\\s+)(\\d[\\d,.]*)(?=\\s|$)`, "gi");
+  const amountFirstPattern = new RegExp(`(?:^|\\s)(\\d[\\d,.]*)\\s*(?:[.)\\-:]\\s*|\\s+)(${monthPattern})(?=\\s|$)`, "gi");
+
+  for (const match of normalized.matchAll(monthFirstPattern)) {
+    const month = monthFromLabel(match[1]);
+    if (month) rows.push({ month, amount: parseAnnualAmount(match[3]) });
+  }
+  for (const match of normalized.matchAll(amountFirstPattern)) {
+    const month = monthFromLabel(match[2]);
+    if (month) rows.push({ month, amount: parseAnnualAmount(match[1]) });
+  }
+
+  return rows;
 }
 
 export function parseAnnualSummary(lines: AnnualOcrLine[], fallbackYear: number): AnnualSummary {
@@ -86,7 +93,7 @@ export function parseAnnualSummary(lines: AnnualOcrLine[], fallbackYear: number)
 
   for (const line of lines) {
     const text = line.text.trim();
-    if (!text || /\b20\d{2}\b/.test(normalizeDigits(text))) continue;
+    if (!text) continue;
 
     const rows = readRowsFromLine(text);
     if (rows.length) {
@@ -99,6 +106,7 @@ export function parseAnnualSummary(lines: AnnualOcrLine[], fallbackYear: number)
       pendingMonth = null;
       continue;
     }
+    if (/\b20\d{2}\b/.test(normalizeDigits(text))) continue;
 
     const onlyMonth = monthFromLabel(text.replace(/[.)\-:]/g, "").trim());
     if (onlyMonth) {
