@@ -11,10 +11,13 @@ test.describe("מצב הדגמה", () => {
     await page.getByRole("button", { name: "הזנה מתמונה" }).click();
     await expect(page.getByRole("heading", { name: "צילום דף הוצאות" })).toBeVisible();
     await expect(page.getByLabel("החודש שאליו שייכת התמונה")).toBeVisible();
-    await expect(page.locator('input[type="file"]')).toHaveAttribute(
+    await expect(page.getByText("בחירה מהגלריה")).toBeVisible();
+    await expect(page.getByText("צילום חדש")).toBeVisible();
+    await expect(page.locator('input[type="file"]').first()).toHaveAttribute(
       "accept",
       /image\/jpeg/,
     );
+    await expect(page.locator('input[type="file"]').nth(1)).toHaveAttribute("capture", "environment");
   });
 
   test("בטלפון יש ניווט תחתון שעובד", async ({ page }) => {
@@ -53,6 +56,8 @@ test.describe("מצב הדגמה", () => {
     await page.getByRole("button", { name: "סיכום שנתי מתמונה" }).click();
     await expect(page.getByRole("heading", { name: "צילום סיכום שנתי" })).toBeVisible();
     await expect(page.getByLabel("השנה שאליה שייך הסיכום")).toBeVisible();
+    await page.getByRole("button", { name: "מעבר להזנת חודש מתמונה" }).click();
+    await expect(page.getByRole("heading", { name: "צילום דף הוצאות" })).toBeVisible();
   });
 
   test("מאפשר לבחור כמה הוצאות למחיקה מרוכזת", async ({ page }) => {

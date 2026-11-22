@@ -3,7 +3,7 @@
 import * as Tesseract from "tesseract.js";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { Check, ImagePlus, LoaderCircle, RotateCcw, Sparkles, Upload, X } from "lucide-react";
+import { Camera, Check, ImagePlus, LoaderCircle, RotateCcw, Sparkles, Upload, X } from "lucide-react";
 import type { Category, DraftRow } from "@/lib/types";
 import { annualMonthName, annualSummaryToRows, parseAnnualAmount, parseAnnualSummary } from "@/lib/annual-import";
 import {
@@ -20,12 +20,13 @@ type NotebookImportProps = {
   initialMonth: string;
   destination: "monthly" | "expense" | "annual";
   onConfirm: (rows: DraftRow[], month: string, file: File, extractedText: string) => Promise<void> | void;
+  onSwitchMode?: (destination: "monthly" | "annual") => void;
   onCancel: () => void;
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-export function NotebookImport({ categories, initialMonth, destination, onConfirm, onCancel }: NotebookImportProps) {
+export function NotebookImport({ categories, initialMonth, destination, onConfirm, onSwitchMode, onCancel }: NotebookImportProps) {
   const isAnnual = destination === "annual";
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -174,6 +175,14 @@ export function NotebookImport({ categories, initialMonth, destination, onConfir
           <X size={18} />
         </button>
       </div>
+      {destination !== "expense" && onSwitchMode && (
+        <div className="photo-mode-switch">
+          <span className="small muted">מצב העלאה:</span>
+          <button className="secondary-button" type="button" onClick={() => onSwitchMode(isAnnual ? "monthly" : "annual")}>
+            {isAnnual ? "מעבר להזנת חודש מתמונה" : "מעבר לסיכום שנתי מתמונה"}
+          </button>
+        </div>
+      )}
 
       <div className="photo-import-layout">
         <div className="form-card">
@@ -185,17 +194,36 @@ export function NotebookImport({ categories, initialMonth, destination, onConfir
               <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
             )}
           </label>
-          <label className="upload-dropzone">
+          <div className="upload-dropzone">
             <ImagePlus size={28} />
             <strong>{isAnnual ? "בחירת תמונה של סיכום שנתי" : "בחירת תמונה מהטלפון או מהמחשב"}</strong>
             <span className="small muted">JPG, PNG או HEIC עד 10 מגה־בייט</span>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              capture="environment"
-              onChange={(event) => selectFile(event.target.files?.[0])}
-            />
-          </label>
+            <div className="upload-source-actions">
+              <label className="secondary-button upload-source-button">
+                <ImagePlus size={17} /> בחירה מהגלריה
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  onChange={(event) => {
+                    selectFile(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+              <label className="secondary-button upload-source-button">
+                <Camera size={17} /> צילום חדש
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  capture="environment"
+                  onChange={(event) => {
+                    selectFile(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          </div>
           {file && <p className="small muted">נבחרה תמונה: {file.name}</p>}
           {error && <p className="field-error" role="alert">{error}</p>}
           <div className="form-actions">
