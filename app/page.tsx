@@ -4,9 +4,11 @@ import { connection } from "next/server";
 
 export const instant = false;
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   await connection();
   const user = await getCurrentUser();
+  const params = await searchParams;
+  const loginNext = params.next?.startsWith("/") && !params.next.startsWith("//") ? params.next : undefined;
   const dateParts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Jerusalem",
     year: "numeric",
@@ -25,6 +27,7 @@ export default async function Home() {
       displayName={user?.user_metadata?.full_name ?? user?.user_metadata?.name}
       initialDate={today}
       initialMonth={initialMonth}
+      loginNext={loginNext}
     />
   );
 }

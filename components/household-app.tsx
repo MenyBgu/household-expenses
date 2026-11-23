@@ -78,6 +78,7 @@ type HouseholdAppProps = {
   displayName?: string;
   initialDate: string;
   initialMonth: string;
+  loginNext?: string;
 };
 
 type ExpenseFormValues = {
@@ -837,14 +838,18 @@ function SettingsView({
   categories,
   displayName,
   canManageHousehold,
+  sharingAvailable,
   onSave,
+  onInvite,
   onToggleCategory,
 }: {
   household: Household;
   categories: Category[];
   displayName: string;
   canManageHousehold: boolean;
+  sharingAvailable: boolean;
   onSave: (values: { name: string; currency: string; displayName: string }) => Promise<void>;
+  onInvite: (email: string) => Promise<void>;
   onToggleCategory: (id: string, isActive: boolean) => Promise<void>;
 }) {
   const [name, setName] = useState(household.name);
@@ -853,6 +858,8 @@ function SettingsView({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
   const manageableCategories = categories.filter((category) => !mergedCategoryNames.has(category.name));
 
   async function save(event: FormEvent) {
@@ -889,6 +896,22 @@ function SettingsView({
     }
   }
 
+  async function invite(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setInviting(true);
+    try {
+      await onInvite(inviteEmail.trim());
+      setInviteEmail("");
+      setMessage("ההזמנה נשלחה. היא תהיה בתוקף במשך 7 ימים.");
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "שליחת ההזמנה נכשלה.");
+    } finally {
+      setInviting(false);
+    }
+  }
+
   return (
     <section className="content-section settings-page">
       <div className="section-heading">
@@ -918,6 +941,18 @@ function SettingsView({
       </form>
 
       <article className="panel settings-card">
+        <div className="panel-heading"><div><h2>שיתוף משק הבית</h2><p className="muted">הזמינו אדם נוסף לפי כתובת אימייל. הוא יקבל גישה רק למשק הבית הזה.</p></div></div>
+        {canManageHousehold && sharingAvailable ? (
+          <form className="invite-form" onSubmit={invite}>
+            <label>כתובת אימייל<input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="name@example.com" required /></label>
+            <button className="primary-button" disabled={inviting}>{inviting ? "שולח..." : "שליחת הזמנה"}</button>
+          </form>
+        ) : (
+          <p className="small muted">{canManageHousehold ? "שיתוף זמין לאחר חיבור Supabase והפעלת ספק האימייל." : "רק מנהל משק הבית יכול לשלוח הזמנות."}</p>
+        )}
+      </article>
+
+      <article className="panel settings-card">
         <div className="panel-heading">
           <div><h2>קטגוריות פעילות</h2><p className="muted">הסתרה מוציאה קטגוריה מהטפסים והגרפים, בלי למחוק הוצאות קיימות.</p></div>
           <span className="small muted">{manageableCategories.filter((category) => category.is_active).length} פעילות</span>
@@ -937,7 +972,7 @@ function SettingsView({
   );
 }
 
-export default function HouseholdApp({ supabaseConfigured, userId, userEmail, displayName, initialDate, initialMonth }: HouseholdAppProps) {
+export default function HouseholdApp({ supabaseConfigured, userId, userEmail, displayName, initialDate, initialMonth, loginNext }: HouseholdAppProps) {
   const demoMode = !supabaseConfigured;
   const [view, setView] = useState<View>("dashboard");
   const [household, setHousehold] = useState<Household | null>(demoMode ? demoHousehold : null);
@@ -1137,9 +1172,13 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
 
   async function login() {
     if (!supabase) return;
+    const callback = new URL("/auth/callback", window.location.origin);
+    if (loginNext?.startsWith("/") && !loginNext.startsWith("//")) {
+      callback.searchParams.set("next", loginNext);
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callback.toString() },
     });
     if (error) setAuthError("ההתחברות נכשלה. נסו שוב.");
   }
@@ -1180,6 +1219,17 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     setPhotoDestination(destination);
     setPhotoReturnView(returnView);
     setView("photo");
+  }
+
+  async function inviteMember(email: string) {
+    if (!household) return;
+    const response = await fetch("/api/household-invitations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ householdId: household.id, email }),
+    });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(result.error || "שליחת ההזמנה נכשלה.");
   }
 
   async function saveSettings(values: { name: string; currency: string; displayName: string }) {
@@ -1626,7 +1676,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} initialMonth={initialMonth} dateFilter={expensesDateFilter} onDateFilterChange={setExpensesDateFilter} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setNewExpensePrefill(null); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDuplicate={duplicateExpense} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, `${draftMonth}-01`)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={photoReturnView === "monthly" ? draftMonth : dashboardMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView(photoReturnView)} /> :
-    view === "settings" ? <SettingsView household={household} categories={categories} displayName={accountDisplayName} canManageHousehold={household.role === "admin"} onSave={saveSettings} onToggleCategory={toggleCategory} /> :
+    view === "settings" ? <SettingsView household={household} categories={categories} displayName={accountDisplayName} canManageHousehold={household.role === "admin"} sharingAvailable={supabaseConfigured} onSave={saveSettings} onInvite={inviteMember} onToggleCategory={toggleCategory} /> :
     <section className="content-section"><div className="section-heading"><div><p className="eyebrow">שמירה להמשך</p><h1>טיוטות חודשיות</h1><p className="muted">הטיוטות נשמרות כדי שאפשר יהיה להמשיך מאוחר יותר.</p></div></div><div className="empty-state"><FileText size={30} /><h3>טיוטה חדשה מתחילה במסך הזנת חודש</h3><button className="primary-button" onClick={() => setView("monthly")}>פתיחת הזנה חודשית</button></div></section>;
   const expenseFormInitial = editingExpense
     ? {

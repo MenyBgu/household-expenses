@@ -110,6 +110,31 @@ describe("סכמת מסד הנתונים והרשאות", () => {
     expect(expenseRows.rows).toHaveLength(0);
   });
 
+  it("מאפשר לקבל הזמנה למשק בית רק עם האימייל המתאים", async () => {
+    db = await createTestDb();
+    const owner = await createUser(db, "owner");
+    const invited = await createUser(db, "invited");
+    const householdId = await createHousehold(db, owner, "משפחה משותפת");
+
+    await asUser(db, owner);
+    await db.query(
+      `insert into public.household_invitations
+        (household_id, invited_email, invited_by, token_hash)
+       values ($1, 'invited@example.com', $2, 'test-invitation-hash')`,
+      [householdId, owner],
+    );
+
+    await asUser(db, invited);
+    await db.query("select public.accept_household_invitation($1)", ["test-invitation-hash"]);
+
+    await asAdmin(db);
+    const members = await db.query<{ count: string }>(
+      "select count(*)::text as count from public.household_members where household_id = $1",
+      [householdId],
+    );
+    expect(members.rows[0].count).toBe("2");
+  });
+
   it("מאפשר לחברי אותו משק בית לראות הוצאות, אך לא לשנות את היוצר", async () => {
     db = await createTestDb();
     const owner = await createUser(db, "owner");
