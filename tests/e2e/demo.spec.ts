@@ -8,6 +8,7 @@ test.describe("מצב הדגמה", () => {
     await expect(page.getByRole("heading", { name: "שלום, בואו נעשה סדר" })).toBeVisible();
     await expect(page.getByText("מצב הדגמה פעיל")).toBeVisible();
     await expect(page.getByText("סך כל ההוצאות")).toBeVisible();
+    await expect(page.getByText("© כל הזכויות שמורות למני בוגנים")).toBeVisible();
 
     await page.getByRole("button", { name: "הזנה מתמונה" }).click();
     await expect(page.getByRole("heading", { name: "צילום דף הוצאות" })).toBeVisible();

@@ -1686,6 +1686,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
             <button type="button" onClick={restoreDeletedExpenses}>ביטול</button>
           </div>
         )}
+        <footer className="app-footer">© כל הזכויות שמורות למני בוגנים</footer>
       </main>
       {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={expenseFormInitial} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); openPhoto("expense", expenseFormReturnView); }} onSave={saveExpense} /></div></div>}
     </div>

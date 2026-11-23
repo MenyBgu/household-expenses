@@ -870,6 +870,13 @@ textarea {
   font-weight: 700;
 }
 
+.app-footer {
+  padding: 28px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
 .month-picker {
   display: flex;
   align-items: center;
