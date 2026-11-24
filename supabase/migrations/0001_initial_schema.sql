@@ -388,7 +388,8 @@ begin
     (new.id, 'מתנות ותרומות', 'gift', '#dc2626', true, 290),
     (new.id, 'חיות מחמד', 'paw-print', '#7c3aed', true, 300),
     (new.id, 'הוצאות חד-פעמיות', 'receipt', '#0891b2', true, 310),
-    (new.id, 'אחר', 'ellipsis', '#db2777', true, 320)
+    (new.id, 'אחר', 'ellipsis', '#db2777', true, 320),
+    (new.id, 'טיפוח ויופי', 'sparkles', '#db2777', true, 330)
   on conflict (household_id, name) do nothing;
   update public.categories
   set is_active = false

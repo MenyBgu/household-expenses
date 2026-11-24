@@ -11,6 +11,7 @@ export const demoCategories: Category[] = [
   { id: "food", household_id: demoHousehold.id, name: "מזון וסופר", is_active: false, sort_order: 10 },
   { id: "restaurants", household_id: demoHousehold.id, name: "מסעדות ומשלוחים", is_active: true, sort_order: 20 },
   { id: "shopping", household_id: demoHousehold.id, name: "צרכנות וקניות", is_active: true, sort_order: 30 },
+  { id: "beauty", household_id: demoHousehold.id, name: "טיפוח ויופי", is_active: true, sort_order: 35 },
   { id: "home", household_id: demoHousehold.id, name: "דיור", is_active: true, sort_order: 30 },
   { id: "mortgage", household_id: demoHousehold.id, name: "שכירות או משכנתה", is_active: false, sort_order: 40 },
   { id: "electricity", household_id: demoHousehold.id, name: "חשמל", is_active: false, sort_order: 50 },

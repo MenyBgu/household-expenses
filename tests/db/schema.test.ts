@@ -30,7 +30,7 @@ describe("סכמת מסד הנתונים והרשאות", () => {
       [householdId],
     );
 
-    expect(result.rows[0].count).toBe("32");
+    expect(result.rows[0].count).toBe("33");
   });
 
   it("מסמן קטגוריות מאוחדות כלא פעילות ומשנה את שם התחבורה", async () => {

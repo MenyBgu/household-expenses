@@ -15,6 +15,7 @@ const categories: Category[] = [
   { id: "transport", household_id: "house", name: "תחבורה ורכב", is_active: true, sort_order: 1 },
   { id: "home", household_id: "house", name: "דיור", is_active: true, sort_order: 2 },
   { id: "shopping", household_id: "house", name: "צרכנות וקניות", is_active: true, sort_order: 3 },
+  { id: "beauty", household_id: "house", name: "טיפוח ויופי", is_active: true, sort_order: 3 },
   { id: "events", household_id: "house", name: "אירועים", is_active: true, sort_order: 4 },
   { id: "other", household_id: "house", name: "אחר", is_active: true, sort_order: 5 },
   { id: "bank", household_id: "house", name: "בנק ועמלות", is_active: true, sort_order: 6 },
@@ -25,7 +26,7 @@ const categories: Category[] = [
 
 describe("קריאת רשימת הוצאות מתמונה", () => {
   it("כולל את כל קטגוריות ברירת המחדל גם במצב הדגמה", () => {
-    expect(demoCategories).toHaveLength(32);
+    expect(demoCategories).toHaveLength(33);
     expect(demoCategories.map((category) => category.name)).toContain("שכירות או משכנתה");
   });
 
@@ -71,6 +72,8 @@ describe("קריאת רשימת הוצאות מתמונה", () => {
     expect(byName("ארנונה")).toBe("דיור");
     expect(byName("גז")).toBe("דיור");
     expect(byName("שמלה")).toBe("צרכנות וקניות");
+    expect(byName("תספורת")).toBe("טיפוח ויופי");
+    expect(byName("מניקור")).toBe("טיפוח ויופי");
     expect(byName("מלון")).toBe("בילויים ופנאי");
     expect(byName("אינסטלטור")).toBe("דיור");
     expect(byName("ספר קטן")).toBe("אחר");
