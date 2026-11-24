@@ -1178,7 +1178,10 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: callback.toString() },
+      options: {
+        redirectTo: callback.toString(),
+        queryParams: { prompt: "select_account" },
+      },
     });
     if (error) setAuthError("ההתחברות נכשלה. נסו שוב.");
   }
