@@ -72,6 +72,13 @@ test.describe("מצב הדגמה", () => {
     await page.goto("/");
 
     await page.getByRole("button", { name: "הוספת הוצאה" }).click();
+    const today = await page.evaluate(() => {
+      const date = new Date();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${date.getFullYear()}-${month}-${day}`;
+    });
+    await expect(page.getByLabel("תאריך")).toHaveValue(today);
     await page.getByRole("button", { name: "הוספה מתמונה" }).click();
     await expect(page.getByRole("heading", { name: "צילום קבלה או הוצאה" })).toBeVisible();
   });

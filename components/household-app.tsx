@@ -181,6 +181,13 @@ function displayNameFromEmail(email?: string) {
   return email?.split("@")[0] || "משתמש";
 }
 
+function localTodayIso() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${today.getFullYear()}-${month}-${day}`;
+}
+
 function readableError(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === "object") {
@@ -1195,8 +1202,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     setEditingExpense(null);
     setNewExpensePrefill(null);
     setExpenseFormReturnView(returnView);
-    const contextMonth = returnView === "dashboard" ? dashboardMonth : returnView === "monthly" ? draftMonth : "";
-    setNewExpenseDate(contextMonth ? `${contextMonth}-01` : initialDate);
+    setNewExpenseDate(localTodayIso());
     setShowExpenseForm(true);
   }
 
