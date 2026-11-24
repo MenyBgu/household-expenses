@@ -249,6 +249,20 @@ textarea:focus-visible {
   font-size: clamp(24px, 3vw, 34px);
 }
 
+.results-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  align-items: center;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.results-summary strong {
+  color: var(--foreground);
+}
+
 .section-heading h2,
 .panel h2,
 .form-card h2 {
@@ -686,6 +700,7 @@ textarea {
 .form-actions {
   justify-content: flex-start;
   gap: 9px;
+  flex-wrap: wrap;
   margin-top: 18px;
 }
 
@@ -700,6 +715,16 @@ textarea {
   flex-wrap: wrap;
   gap: 9px;
   margin-bottom: 15px;
+}
+
+.filter-field {
+  gap: 4px;
+  font-size: 11px;
+}
+
+.filter-field input,
+.filter-field select {
+  min-width: 160px;
 }
 
 .month-shortcuts {
@@ -1327,6 +1352,10 @@ textarea {
     width: 100%;
   }
 
+  .results-summary {
+    font-size: 12px;
+  }
+
   .stats-grid {
     gap: 9px;
   }
@@ -1502,6 +1531,10 @@ textarea {
   .filters-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .filter-field {
+    width: 100%;
   }
 
   .month-shortcuts {

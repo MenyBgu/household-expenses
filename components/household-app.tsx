@@ -132,6 +132,15 @@ const mergedCategoryNames = new Set([
   "בעלי מקצוע",
 ]);
 
+const categoryPalette = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#0f766e"];
+
+function categoryColor(category?: Category) {
+  if (category?.color && /^#[0-9a-f]{6}$/i.test(category.color)) return category.color;
+  if (!category) return categoryPalette[0];
+  const hash = [...category.id].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return categoryPalette[hash % categoryPalette.length];
+}
+
 function toDatabasePaymentMethod(value: string) {
   return legacyPaymentMethods[value] ?? value;
 }
@@ -316,12 +325,13 @@ function ExpenseForm({
   editingId?: string;
   onCancel?: () => void;
   onPhoto?: () => void;
-  onSave: (values: ExpenseFormValues, id?: string) => Promise<void>;
+  onSave: (values: ExpenseFormValues, id?: string, keepOpen?: boolean) => Promise<void>;
 }) {
   const [values, setValues] = useState(initial);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [categoryTouched, setCategoryTouched] = useState(Boolean(initial.category_id));
+  const keepOpenAfterSave = useRef(false);
 
   function change(name: keyof ExpenseFormValues, value: string) {
     setValues((current) => {
@@ -337,6 +347,8 @@ function ExpenseForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const keepOpen = keepOpenAfterSave.current;
+    keepOpenAfterSave.current = false;
     const result = expenseSchema.safeParse(values);
     if (!result.success) {
       setError(result.error.issues[0]?.message ?? "יש לתקן את הפרטים");
@@ -350,7 +362,7 @@ function ExpenseForm({
     setError("");
     setSaving(true);
     try {
-      await onSave(values, editingId);
+      await onSave(values, editingId, keepOpen);
     } catch (saveError) {
       setError(readableError(saveError, "שמירת ההוצאה נכשלה"));
     } finally {
@@ -370,7 +382,7 @@ function ExpenseForm({
       <div className="form-grid">
         <label className="span-two">
           שם העסק
-          <input value={values.merchant_name} onChange={(event) => change("merchant_name", event.target.value)} placeholder="לדוגמה: רמי לוי" />
+          <input autoFocus={!editingId} value={values.merchant_name} onChange={(event) => change("merchant_name", event.target.value)} placeholder="לדוגמה: רמי לוי" />
         </label>
         <label>
           סכום
@@ -419,6 +431,7 @@ function ExpenseForm({
       <div className="form-actions">
         {onCancel && <button type="button" className="secondary-button" onClick={onCancel}>ביטול</button>}
         {!editingId && onPhoto && <button type="button" className="secondary-button" onClick={onPhoto}><ImagePlus size={17} /> הוספה מתמונה</button>}
+        {!editingId && <button type="submit" className="secondary-button quick-save-button" onClick={() => { keepOpenAfterSave.current = true; }}>שמירה והוספת עוד</button>}
         <button className="primary-button" disabled={saving}>{saving ? "שומר..." : editingId ? "שמירת שינויים" : "שמירת הוצאה"}</button>
       </div>
     </form>
@@ -609,6 +622,7 @@ function Dashboard({
   const change = percentChange(total, previousTotal);
   const byCategory = categories.filter((category) => category.is_active).map((category) => ({
     name: category.name,
+    color: categoryColor(category),
     amount: sumMoney(monthExpenses.filter((expense) => expense.category_id === category.id).map((expense) => expense.amount)),
   })).filter((category) => category.amount > 0).sort((a, b) => b.amount - a.amount);
   const largest = byCategory[0];
@@ -633,6 +647,7 @@ function Dashboard({
   const highestMonth = [...annualTotals].sort((a, b) => b.amount - a.amount)[0];
   const annualByCategory = categories.filter((category) => category.is_active).map((category) => ({
     name: category.name,
+    color: categoryColor(category),
     amount: sumMoney(yearExpenses.filter((expense) => expense.category_id === category.id).map((expense) => expense.amount)),
   })).filter((category) => category.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);
   const localYearlyTotals = Array.from(new Set(expenses.map((expense) => Number(expense.expense_date.slice(0, 4)))))
@@ -698,7 +713,7 @@ function Dashboard({
             </article>
             <article className="panel chart-panel">
               <div className="panel-heading"><div><h2>התפלגות לפי קטגוריה</h2><p className="muted">החודש הנבחר</p></div><BarChart3 size={20} className="muted-icon" /></div>
-              {byCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={byCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" radius={[0, 5, 5, 0]}>{byCategory.map((entry, index) => <Cell key={entry.name} fill={["#3b5ccc", "#36a269", "#c98018", "#8b5cf6", "#d25b83"][index % 5]} />)}</Bar></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הגרף.</p></div>}
+              {byCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={byCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" radius={[0, 5, 5, 0]}>{byCategory.map((entry) => <Cell key={entry.name} fill={entry.color} />)}</Bar></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הגרף.</p></div>}
             </article>
           </div>
           {largest && <div className="insight"><Sparkles size={19} /><span>הקטגוריה הגדולה ביותר החודש היא <strong>{largest.name}</strong>, עם {formatCurrency(largest.amount)}.</span></div>}
@@ -719,7 +734,7 @@ function Dashboard({
             </article>
             <article className="panel chart-panel">
               <div className="panel-heading"><div><h2>הקטגוריות המובילות</h2><p className="muted">סיכום שנתי</p></div><BarChart3 size={20} className="muted-icon" /></div>
-              {annualByCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={annualByCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" fill="#36a269" radius={[0, 5, 5, 0]} /></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הסיכום השנתי.</p></div>}
+              {annualByCategory.length ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={annualByCategory} layout="vertical" margin={{ top: 4, right: 8, left: 4, bottom: 4 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" /><XAxis type="number" tickFormatter={(value) => `${value} ₪`} stroke="var(--muted)" fontSize={11} /><YAxis type="category" dataKey="name" width={105} stroke="var(--muted)" fontSize={11} /><Tooltip formatter={(value) => formatCurrency(Number(value))} /><Bar dataKey="amount" name="סכום" radius={[0, 5, 5, 0]}>{annualByCategory.map((entry) => <Cell key={entry.name} fill={entry.color} />)}</Bar></BarChart></ResponsiveContainer></div> : <div className="empty-state"><BarChart3 size={30} /><p>עדיין אין מספיק נתונים להצגת הסיכום השנתי.</p></div>}
             </article>
           </div>
           <article className="panel chart-panel annual-comparison-panel">
@@ -755,7 +770,6 @@ function Dashboard({
 function ExpensesView({
   expenses,
   categories,
-  initialMonth,
   dateFilter,
   onDateFilterChange,
   onAdd,
@@ -766,7 +780,6 @@ function ExpensesView({
 }: {
   expenses: Expense[];
   categories: Category[];
-  initialMonth: string;
   dateFilter: string;
   onDateFilterChange: (month: string) => void;
   onAdd: () => void;
@@ -786,6 +799,8 @@ function ExpensesView({
   });
   const total = sumMoney(filtered.map((expense) => expense.amount));
   const allSelected = filtered.length > 0 && filtered.every((expense) => selectedIds.has(expense.id));
+  const currentMonth = localTodayIso().slice(0, 7);
+  const activeCategoryName = categories.find((category) => category.id === categoryFilter)?.name;
 
   function toggleSelected(id: string) {
     setSelectedIds((current) => {
@@ -810,18 +825,18 @@ function ExpensesView({
 
   return (
     <section className="content-section">
-      <div className="section-heading"><div><p className="eyebrow">כל הנתונים במקום אחד</p><h1>הוצאות</h1><p className="muted">{filtered.length} תוצאות · {formatCurrency(total)}</p></div><button className="primary-button" onClick={onAdd}><Plus size={18} /> הוספת הוצאה</button></div>
+      <div className="section-heading"><div><p className="eyebrow">כל הנתונים במקום אחד</p><h1>הוצאות</h1><div className="results-summary" role="status"><strong>{filtered.length} תוצאות</strong><span>{formatCurrency(total)}</span><span>·</span><span>{dateFilter ? monthTitle(dateFilter) : "כל החודשים"}</span>{activeCategoryName && <><span>·</span><span>{activeCategoryName}</span></>}{query && <><span>·</span><span>חיפוש: {query}</span></>}</div></div><button className="primary-button" onClick={onAdd}><Plus size={18} /> הוספת הוצאה</button></div>
       <div className="filters-bar">
         <label className="search-field"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש לפי עסק או תיאור" /></label>
-        <label><span className="sr-only">חודש</span><input type="month" value={dateFilter} onChange={(event) => onDateFilterChange(event.target.value)} /></label>
-        <label><span className="sr-only">קטגוריה</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">כל הקטגוריות</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+        <label className="filter-field"><span>חודש</span><input type="month" aria-label="סינון לפי חודש" value={dateFilter} onChange={(event) => onDateFilterChange(event.target.value)} /></label>
+        <label className="filter-field"><span>קטגוריה</span><select aria-label="סינון לפי קטגוריה" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">כל הקטגוריות</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
         {(query || categoryFilter || dateFilter) && <button className="text-button" onClick={() => { setQuery(""); setCategoryFilter(""); onDateFilterChange(""); }}>ניקוי מסננים</button>}
       </div>
       <div className="month-shortcuts" aria-label="קיצורי חודשים">
         {[
-          ["החודש", initialMonth],
-          ["החודש הקודם", previousIsoMonth(initialMonth)],
-          ["לפני חודשיים", previousIsoMonth(previousIsoMonth(initialMonth))],
+          ["החודש הנוכחי", currentMonth],
+          ["החודש הקודם", previousIsoMonth(currentMonth)],
+          ["לפני חודשיים", previousIsoMonth(previousIsoMonth(currentMonth))],
         ].map(([label, value]) => (
           <button key={value} type="button" className={dateFilter === value ? "active" : ""} aria-pressed={dateFilter === value} onClick={() => onDateFilterChange(value)}>
             {label}
@@ -833,7 +848,10 @@ function ExpensesView({
         {selectedIds.size > 0 && <><span className="small muted">{selectedIds.size} נבחרו</span><button className="danger-button" type="button" onClick={deleteSelected}>מחיקת ההוצאות שנבחרו</button></>}
       </div>
       <div className="expense-list">
-        {filtered.map((expense) => <article className={`expense-item ${selectedIds.has(expense.id) ? "selected" : ""}`} key={expense.id}><label className="expense-checkbox"><input type="checkbox" checked={selectedIds.has(expense.id)} onChange={() => toggleSelected(expense.id)} aria-label={`בחירת ${expense.merchant_name || expense.description || "הוצאה"}`} /></label><div className="expense-category-dot" /><div className="expense-main"><strong>{expense.merchant_name || expense.description}</strong><span>{expense.description && expense.merchant_name ? expense.description : expense.category?.name}</span>{scheduleLabel(expense.schedule_type ?? "none", expense.schedule_months) && <small>{scheduleLabel(expense.schedule_type ?? "none", expense.schedule_months)}</small>}</div><div className="expense-category">{expense.category?.name ?? categories.find((category) => category.id === expense.category_id)?.name}</div><div className="expense-date">{formatDate(expense.expense_date)}</div><strong className="expense-amount">{formatCurrency(expense.amount, expense.currency)}</strong><div className="expense-actions"><button className="icon-button" onClick={() => onDuplicate(expense)} aria-label="שכפול הוצאה"><Copy size={16} /></button><button className="icon-button" onClick={() => onEdit(expense)} aria-label="עריכת הוצאה">✎</button><button className="icon-button danger-icon" onClick={() => onDelete(expense.id)} aria-label="מחיקת הוצאה"><Trash2 size={16} /></button></div></article>)}
+        {filtered.map((expense) => {
+          const expenseCategory = expense.category ?? categories.find((category) => category.id === expense.category_id);
+          return <article className={`expense-item ${selectedIds.has(expense.id) ? "selected" : ""}`} key={expense.id}><label className="expense-checkbox"><input type="checkbox" checked={selectedIds.has(expense.id)} onChange={() => toggleSelected(expense.id)} aria-label={`בחירת ${expense.merchant_name || expense.description || "הוצאה"}`} /></label><div className="expense-category-dot" style={{ backgroundColor: categoryColor(expenseCategory) }} /><div className="expense-main"><strong>{expense.merchant_name || expense.description}</strong><span>{expense.description && expense.merchant_name ? expense.description : expenseCategory?.name}</span>{scheduleLabel(expense.schedule_type ?? "none", expense.schedule_months) && <small>{scheduleLabel(expense.schedule_type ?? "none", expense.schedule_months)}</small>}</div><div className="expense-category">{expenseCategory?.name}</div><div className="expense-date">{formatDate(expense.expense_date)}</div><strong className="expense-amount">{formatCurrency(expense.amount, expense.currency)}</strong><div className="expense-actions"><button className="icon-button" onClick={() => onDuplicate(expense)} aria-label="שכפול הוצאה"><Copy size={16} /></button><button className="icon-button" onClick={() => onEdit(expense)} aria-label="עריכת הוצאה">✎</button><button className="icon-button danger-icon" onClick={() => onDelete(expense.id)} aria-label="מחיקת הוצאה"><Trash2 size={16} /></button></div></article>;
+        })}
         {!filtered.length && <div className="empty-state"><Search size={30} /><h3>לא נמצאו הוצאות</h3><p>נסו לשנות את החיפוש או להוסיף הוצאה חדשה.</p></div>}
       </div>
     </section>
@@ -999,6 +1017,8 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [newExpensePrefill, setNewExpensePrefill] = useState<ExpenseFormValues | null>(null);
+  const [lastExpenseCategoryId, setLastExpenseCategoryId] = useState("");
+  const [expenseFormKey, setExpenseFormKey] = useState(0);
   const [expenseFormReturnView, setExpenseFormReturnView] = useState<View>("expenses");
   const [newExpenseDate, setNewExpenseDate] = useState(initialDate);
   const [undoDeleteState, setUndoDeleteState] = useState<{ ids: string[]; expenses: Expense[] } | null>(null);
@@ -1201,6 +1221,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   function openExpenseForm(returnView: View = view) {
     setEditingExpense(null);
     setNewExpensePrefill(null);
+    setExpenseFormKey((current) => current + 1);
     setExpenseFormReturnView(returnView);
     setNewExpenseDate(localTodayIso());
     setShowExpenseForm(true);
@@ -1291,7 +1312,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
     await loadRemoteData();
   }
 
-  async function saveExpense(values: ExpenseFormValues, id?: string) {
+  async function saveExpense(values: ExpenseFormValues, id?: string, keepOpen = false) {
     const scheduleType = values.schedule_type;
     const scheduleMonths = scheduleType === "none" ? null : Number(values.schedule_months);
     const basePayload = {
@@ -1358,6 +1379,15 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         if (error) throw new Error(`שמירת ההוצאה נכשלה: ${error.message}`);
         await loadRemoteData();
       }
+    }
+    setLastExpenseCategoryId(values.category_id);
+    if (keepOpen && !id) {
+      setEditingExpense(null);
+      setNewExpensePrefill(emptyExpenseForm(values.category_id, localTodayIso()));
+      setNewExpenseDate(localTodayIso());
+      setExpenseFormKey((current) => current + 1);
+      setView(expenseFormReturnView);
+      return;
     }
     setShowExpenseForm(false);
     setEditingExpense(null);
@@ -1682,7 +1712,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
   if (!household) return <Onboarding onCreate={createHousehold} displayName={displayName || displayNameFromEmail(userEmail)} demoMode={demoMode} />;
 
   const currentView = view === "dashboard" ? <Dashboard expenses={expenses} categories={categories} selectedMonth={dashboardMonth} onMonthChange={setDashboardMonth} range={dashboardRange} onRangeChange={setDashboardRange} yearWindowStart={yearWindowStart} onYearWindowStart={setYearWindowStart} onAdd={() => openExpenseForm("dashboard")} onNavigate={setView} onAnnualPhoto={() => openPhoto("annual", "dashboard")} allTimeTotal={allTimeTotal} yearlyTotals={yearlyTotals} /> :
-    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} initialMonth={initialMonth} dateFilter={expensesDateFilter} onDateFilterChange={setExpensesDateFilter} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setNewExpensePrefill(null); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDuplicate={duplicateExpense} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
+    view === "expenses" ? <ExpensesView expenses={expenses} categories={categories} dateFilter={expensesDateFilter} onDateFilterChange={setExpensesDateFilter} onAdd={() => openExpenseForm("expenses")} onEdit={(expense) => { setEditingExpense(expense); setNewExpensePrefill(null); setExpenseFormReturnView("expenses"); setShowExpenseForm(true); }} onDuplicate={duplicateExpense} onDelete={deleteExpense} onDeleteMany={deleteExpenses} /> :
     view === "monthly" ? <MonthlyEntry rows={draftRows} categories={categories} expenses={expenses} month={draftMonth} onMonthChange={setDraftMonth} onChange={updateRow} onSaveDraft={saveDraft} onCommit={commitDraft} onAddRow={() => setDraftRows((rows) => [...rows, makeNewRow(categories[0]?.id, `${draftMonth}-01`)])} onDeleteRow={(id) => setDraftRows((rows) => rows.filter((row) => row.id !== id))} /> :
     view === "photo" ? <NotebookImport categories={categories} initialMonth={photoReturnView === "monthly" ? draftMonth : dashboardMonth} destination={photoDestination} onConfirm={acceptNotebookRows} onSwitchMode={(destination) => setPhotoDestination(destination)} onCancel={() => setView(photoReturnView)} /> :
     view === "settings" ? <SettingsView household={household} categories={categories} displayName={accountDisplayName} canManageHousehold={household.role === "admin"} sharingAvailable={supabaseConfigured} onSave={saveSettings} onInvite={inviteMember} onToggleCategory={toggleCategory} /> :
@@ -1699,7 +1729,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         schedule_type: editingExpense.schedule_type ?? (editingExpense.is_recurring ? "fixed" : "none"),
         schedule_months: editingExpense.schedule_months ? String(editingExpense.schedule_months) : "",
       }
-    : newExpensePrefill ?? emptyExpenseForm("", newExpenseDate);
+    : newExpensePrefill ?? emptyExpenseForm(lastExpenseCategoryId, newExpenseDate);
 
   return (
     <div className="app-layout">
@@ -1747,7 +1777,7 @@ export default function HouseholdApp({ supabaseConfigured, userId, userEmail, di
         )}
         <footer className="app-footer">© כל הזכויות שמורות למני בוגנים</footer>
       </main>
-      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? "new"} categories={categories} initial={expenseFormInitial} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); openPhoto("expense", expenseFormReturnView); }} onSave={saveExpense} /></div></div>}
+      {showExpenseForm && <div className="modal-backdrop"><div className="modal-card"><ExpenseForm key={editingExpense?.id ?? `new-${expenseFormKey}`} categories={categories} initial={expenseFormInitial} editingId={editingExpense?.id} onCancel={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); }} onPhoto={() => { setShowExpenseForm(false); setEditingExpense(null); setNewExpensePrefill(null); openPhoto("expense", expenseFormReturnView); }} onSave={saveExpense} /></div></div>}
     </div>
   );
 }

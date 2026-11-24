@@ -101,6 +101,26 @@ test.describe("מצב הדגמה", () => {
     await expect(page.getByRole("button", { name: "מחיקת ההוצאות שנבחרו" })).toBeVisible();
   });
 
+  test("מאפשר לחזור לחודש הנוכחי ולהוסיף הוצאה נוספת במהירות", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "הוצאות" }).first().click();
+    const currentMonth = await page.evaluate(() => {
+      const today = new Date();
+      return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    });
+    await page.locator(".filters-bar input[type='month']").fill("2025-05");
+    await page.getByRole("button", { name: "החודש הנוכחי" }).click();
+    await expect(page.locator(".filters-bar input[type='month']")).toHaveValue(currentMonth);
+    await page.getByRole("button", { name: "הוספת הוצאה" }).first().click();
+    await page.getByLabel("שם העסק").fill("בדיקת הוספה מהירה");
+    await page.getByLabel("סכום").fill("10");
+    await page.locator(".modal-card select").first().selectOption({ label: "צרכנות וקניות" });
+    await page.getByRole("button", { name: "שמירה והוספת עוד" }).click();
+    await expect(page.getByRole("heading", { name: "מה הוצאתם?" })).toBeVisible();
+    await expect(page.getByLabel("שם העסק")).toHaveValue("");
+    await expect(page.locator(".modal-card select").first()).toHaveValue("shopping");
+  });
+
   test("שומר את מסנן החודש במסך ההוצאות אחרי עריכה ושמירה", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "הוצאות" }).first().click();
