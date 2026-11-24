@@ -614,6 +614,12 @@ function Dashboard({
   const displayedAllTimeTotal = allTimeTotal === undefined ? sumMoney(expenses.map((expense) => expense.amount)) : allTimeTotal;
   const selectedYear = selectedMonth.slice(0, 4);
   const selectedYearNumber = Number(selectedYear);
+  const [yearDraft, setYearDraft] = useState(selectedYear);
+  useEffect(() => {
+    // The draft lets users clear and retype the year without creating an invalid dashboard month.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setYearDraft(selectedYear);
+  }, [selectedYear]);
   const monthExpenses = expenses.filter((expense) => expense.expense_date.startsWith(selectedMonth));
   const previousMonth = expenses.filter((expense) => expense.expense_date.startsWith(previousIsoMonth(selectedMonth)));
   const yearExpenses = expenses.filter((expense) => expense.expense_date.startsWith(`${selectedYear}-`));
@@ -695,7 +701,17 @@ function Dashboard({
             <button className="icon-button" onClick={() => onMonthChange(nextIsoMonth(selectedMonth))} aria-label="חודש הבא"><ChevronLeft size={18} /></button>
           </div>
         )}
-        {range === "year" && <label className="year-picker"><span>שנה</span><input type="number" min="2000" max="2100" value={selectedYear} onChange={(event) => onMonthChange(`${event.target.value}-01`)} /></label>}
+        {range === "year" && <label className="year-picker"><span>שנה</span><input type="number" min="2000" max="2100" value={yearDraft} onChange={(event) => {
+          const nextYear = event.target.value.replace(/\D/g, "").slice(0, 4);
+          setYearDraft(nextYear);
+          const numericYear = Number(nextYear);
+          if (nextYear.length === 4 && numericYear >= 2000 && numericYear <= 2100) {
+            onMonthChange(`${nextYear}-01`);
+          }
+        }} onBlur={() => {
+          const numericYear = Number(yearDraft);
+          if (yearDraft.length !== 4 || numericYear < 2000 || numericYear > 2100) setYearDraft(selectedYear);
+        }} aria-label="בחירת שנה לניתוח" /></label>}
       </div>
       {range === "month" ? (
         <>

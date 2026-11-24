@@ -50,6 +50,18 @@ test.describe("מצב הדגמה", () => {
     await expect(page.getByText("השוואת הוצאות בין שנים")).toBeVisible();
   });
 
+  test("מאפשר לשנות שנה בתצוגה שנתית בלי לקרוס", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("tab", { name: "שנתי" }).click();
+    const yearInput = page.getByLabel("בחירת שנה לניתוח");
+    await yearInput.fill("2025");
+    await expect(yearInput).toHaveValue("2025");
+    await expect(page.getByText("סיכום שנת 2025")).toBeVisible();
+    await yearInput.fill("2024");
+    await expect(yearInput).toHaveValue("2024");
+    await expect(page.getByText("סיכום שנת 2024")).toBeVisible();
+  });
+
   test("שומר את מסך הזנת החודש והחודש גם אחרי שמירת טיוטה וטעינה מחדש", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "הזנת חודש שלם" }).first().click();
